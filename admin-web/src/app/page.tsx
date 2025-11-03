@@ -107,19 +107,6 @@ function DashboardTab() {
           </div>
         </div>
       </div>
-
-      <div className="bg-yellow-900/20 border border-yellow-700 rounded-lg p-4">
-        <div className="flex items-start gap-3">
-          <span className="text-yellow-500 text-xl">⚠️</span>
-          <div>
-            <h4 className="font-semibold text-yellow-500">Temporary Baseline UI</h4>
-            <p className="text-sm text-gray-300 mt-1">
-              This interface serves as a temporary administration panel. Production UI will be
-              generated from Figma exports at <code className="text-cyan-400">.figma/fe-design/</code>
-            </p>
-          </div>
-        </div>
-      </div>
     </div>
   )
 }
