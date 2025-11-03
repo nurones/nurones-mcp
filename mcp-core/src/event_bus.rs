@@ -44,10 +44,14 @@ pub struct InMemoryEventBus {
 struct StoredEvent {
     id: String,
     stream_id: String,
+    #[allow(dead_code)]
     event_type: String,
     version: u64,
+    #[allow(dead_code)]
     data: serde_json::Value,
+    #[allow(dead_code)]
     metadata: EventMetadata,
+    #[allow(dead_code)]
     context: ContextFrame,
     timestamp: chrono::DateTime<chrono::Utc>,
 }
