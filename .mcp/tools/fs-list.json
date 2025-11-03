@@ -1,0 +1,7 @@
+{
+  "name": "fs.list",
+  "version": "1.0.0",
+  "entry": "wasm://examples/fs-list/target/wasm32-wasip1/release/fs_list.wasm",
+  "permissions": ["read"],
+  "description": "List directory contents with context-aware filtering (WASI)"
+}

@@ -1,0 +1,7 @@
+{
+  "name": "fs.search",
+  "version": "1.0.0",
+  "entry": "wasm://examples/fs-search/target/wasm32-wasip1/release/fs_search.wasm",
+  "permissions": ["read"],
+  "description": "Search files with pattern matching and context limits (WASI)"
+}

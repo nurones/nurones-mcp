@@ -1,0 +1,7 @@
+{
+  "name": "db.execute",
+  "version": "1.0.0",
+  "entry": "native://database/execute",
+  "permissions": ["write", "db"],
+  "description": "Execute database mutations with context-governed safety"
+}

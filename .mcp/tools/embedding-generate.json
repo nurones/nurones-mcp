@@ -1,0 +1,7 @@
+{
+  "name": "embedding.generate",
+  "version": "1.0.0",
+  "entry": "native://ai/embedding",
+  "permissions": ["ai", "compute"],
+  "description": "Generate text embeddings with context-aware batching"
+}

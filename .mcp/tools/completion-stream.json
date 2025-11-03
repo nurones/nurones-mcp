@@ -1,0 +1,7 @@
+{
+  "name": "completion.stream",
+  "version": "1.0.0",
+  "entry": "native://ai/completion",
+  "permissions": ["ai", "compute"],
+  "description": "Stream LLM completions with context-governed token limits"
+}

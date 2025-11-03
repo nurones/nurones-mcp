@@ -1,0 +1,7 @@
+{
+  "name": "db.schema",
+  "version": "1.0.0",
+  "entry": "native://database/schema",
+  "permissions": ["read", "db"],
+  "description": "Retrieve database schema information with context propagation"
+}

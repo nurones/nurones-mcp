@@ -1,0 +1,7 @@
+{
+  "name": "db.query",
+  "version": "1.0.0",
+  "entry": "native://database/query",
+  "permissions": ["read", "db"],
+  "description": "Execute database queries with context-aware throttling"
+}

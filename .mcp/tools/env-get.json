@@ -1,0 +1,7 @@
+{
+  "name": "env.get",
+  "version": "1.0.0",
+  "entry": "native://system/env",
+  "permissions": ["read", "system"],
+  "description": "Read environment variables with context-aware security filtering"
+}

@@ -1,0 +1,7 @@
+{
+  "name": "fs.delete",
+  "version": "1.0.0",
+  "entry": "wasm://examples/fs-delete/target/wasm32-wasip1/release/fs_delete.wasm",
+  "permissions": ["write", "delete"],
+  "description": "Delete files with context-governed safety checks (WASI)"
+}

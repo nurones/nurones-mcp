@@ -1,0 +1,7 @@
+{
+  "name": "http.request",
+  "version": "1.0.0",
+  "entry": "native://http/request",
+  "permissions": ["network"],
+  "description": "Execute HTTP requests with context-aware rate limiting"
+}

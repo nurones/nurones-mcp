@@ -1,0 +1,7 @@
+{
+  "name": "fetch.url",
+  "version": "1.0.0",
+  "entry": "native://http/fetch",
+  "permissions": ["network"],
+  "description": "Fetch web content with context-governed bandwidth limits"
+}

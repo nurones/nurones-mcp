@@ -1,0 +1,7 @@
+{
+  "name": "process.execute",
+  "version": "1.0.0",
+  "entry": "native://system/process",
+  "permissions": ["execute", "system"],
+  "description": "Execute system processes with context-governed sandboxing"
+}
