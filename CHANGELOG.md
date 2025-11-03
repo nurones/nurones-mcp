@@ -28,7 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Node/TypeScript SDK with all 6 contract interfaces
 - React/TypeScript admin web UI (5-tab dashboard)
 - VS Code extension (primary host)
-- Qoder integration (secondary host)
+- VS Code extension (primary host)
 - Context Engine with adaptive tuning (±10%/day safety bounds)
 - Event Bus with idempotent routing
 - Tool Executor with WASI support

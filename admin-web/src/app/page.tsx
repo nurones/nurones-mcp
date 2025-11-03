@@ -91,7 +91,7 @@ function DashboardTab() {
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div>
             <span className="text-gray-400">Profile:</span>
-            <span className="ml-2 text-white">qoder-prod</span>
+            <span className="ml-2 text-white">dev</span>
           </div>
           <div>
             <span className="text-gray-400">Transports:</span>

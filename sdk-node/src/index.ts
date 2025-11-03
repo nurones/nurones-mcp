@@ -143,35 +143,6 @@ export interface IObservabilityService {
 }
 
 /**
- * Qoder command definition
- */
-export interface QoderCommand {
-  id: string;
-  title: string;
-  handler: (args?: any) => Promise<void>;
-}
-
-/**
- * Contract 5: IQoderIntegration
- */
-export interface IQoderIntegration {
-  registerExtension(
-    manifest: string,
-    context?: ContextFrame
-  ): Promise<boolean>;
-  
-  exposeCommands(
-    commands: QoderCommand[],
-    context?: ContextFrame
-  ): Promise<void>;
-  
-  streamTelemetry(
-    callback: (log: string) => void,
-    context?: ContextFrame
-  ): Promise<void>;
-}
-
-/**
  * File write options
  */
 export interface WriteOptions {

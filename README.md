@@ -30,7 +30,6 @@ VS Code: open `/extensions/vscode`, `npm i && npm run build`, then press <kbd>Ct
 | **mcp-core/**          | Rust (Tokio) | Event bus, ContextFrame, WASI tools     |
 | **sdk-node/**          | TypeScript   | Contracts, schemas, integration helpers |
 | **extensions/vscode/**  | TypeScript   | Primary host (developer UX)             |
-| **extensions/qoder/** | JSON         | Secondary host integration              |
 | **admin-web/**         | React/Next   | Telemetry + governance                  |
 | **.mcp/**              | JSON         | Config + tool manifests                 |
 

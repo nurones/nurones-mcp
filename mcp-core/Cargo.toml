@@ -4,7 +4,7 @@ version = "0.5.0"
 edition = "2021"
 license = "Apache-2.0"
 authors = ["Nurones Team"]
-description = "Self-adaptive MCP runtime with context engineering for Qoder Platform"
+description = "Self-adaptive MCP runtime with context engineering"
 
 [dependencies]
 tokio = { version = "1.35", features = ["full"] }
