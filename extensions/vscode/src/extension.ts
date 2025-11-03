@@ -135,7 +135,7 @@ async function startMcpServer(context: vscode.ExtensionContext): Promise<boolean
     mcpProcess.stderr?.on("data", (data) => {
       const output = data.toString();
       // Redact potential PII file paths outside allowlist
-      const redacted = output.replace(/\/[^\s]+\/[^\s]+/g, (match) => {
+      const redacted = output.replace(/\/[^\s]+\/[^\s]+/g, (match: string) => {
         const allowedPaths = fsAllowlist.split(',').map(p => p.trim());
         if (allowedPaths.some(ap => match.startsWith(ap))) {
           return match;
