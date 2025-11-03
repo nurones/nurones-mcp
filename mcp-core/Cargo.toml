@@ -1,0 +1,45 @@
+[package]
+name = "nurones-mcp"
+version = "0.5.0"
+edition = "2021"
+license = "Apache-2.0"
+authors = ["Nurones Team"]
+description = "Self-adaptive MCP runtime with context engineering for Qoder Platform"
+
+[dependencies]
+tokio = { version = "1.35", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+opentelemetry = "0.21"
+opentelemetry-otlp = "0.14"
+prometheus = "0.13"
+axum = "0.7"
+tower = "0.4"
+clap = { version = "4.4", features = ["derive"] }
+uuid = { version = "1.6", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+async-trait = "0.1"
+which = "6.0"
+
+[lib]
+name = "nurones_mcp"
+path = "src/lib.rs"
+
+[[bin]]
+name = "nurones-mcp"
+path = "src/main.rs"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["async_tokio"] }
+
+[[bench]]
+name = "event_throughput"
+harness = false

@@ -1,0 +1,11 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'nurones-mcp'
+    static_configs:
+      - targets: ['host.docker.internal:9464']
+    
+    # For Linux hosts, use:
+    # - targets: ['172.17.0.1:9464']

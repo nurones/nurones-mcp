@@ -1,0 +1,29 @@
+{
+  "name": "@nurones/mcp",
+  "version": "0.5.0",
+  "displayName": "Nurones MCP Server",
+  "description": "Self-adaptive, context-aware Model Context Protocol runtime for Qoder",
+  "commands": [
+    {
+      "id": "nurones.mcp.openDashboard",
+      "title": "Open Nurones MCP Dashboard"
+    },
+    {
+      "id": "nurones.mcp.execTool",
+      "title": "Execute MCP Tool"
+    },
+    {
+      "id": "nurones.mcp.viewTrace",
+      "title": "View Context Trace"
+    },
+    {
+      "id": "nurones.mcp.rollback",
+      "title": "Rollback to Stable Configuration"
+    }
+  ],
+  "entry": "stdio://mcp-core",
+  "telemetry": {
+    "channel": "nurones-mcp",
+    "contextPropagation": true
+  }
+}

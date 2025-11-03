@@ -1,0 +1,8 @@
+{
+  "reason_trace_id": "bootstrap-000",
+  "tenant_id": "default",
+  "stage": "dev",
+  "risk_level": 0,
+  "context_confidence": 0.7,
+  "ts": "auto"
+}

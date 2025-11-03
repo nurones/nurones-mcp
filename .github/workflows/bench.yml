@@ -1,0 +1,80 @@
+name: Benchmarks
+
+on:
+  workflow_dispatch:
+    inputs:
+      duration:
+        description: 'Benchmark duration in seconds'
+        required: false
+        default: '600'
+  schedule:
+    # Run benchmarks weekly on Sunday at 00:00 UTC
+    - cron: '0 0 * * 0'
+
+jobs:
+  bench:
+    name: Performance Benchmarks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: mcp-core
+      
+      - name: Install criterion
+        run: cargo install cargo-criterion || true
+      
+      - name: Run benchmarks
+        run: |
+          cd mcp-core
+          cargo criterion --message-format=json | tee ../artifacts/bench.json || true
+      
+      - name: Run load test
+        run: |
+          cd mcp-core
+          cargo build --release
+          timeout ${{ github.event.inputs.duration || '600' }} ./target/release/nurones-mcp --bench-mode || true
+        env:
+          MCP_MAX_INFLIGHT: 2048
+          MCP_BATCH_SIZE: 64
+          MCP_QUEUE_WATERMARK: 0.75
+          CONTEXT_ENGINE: on
+      
+      - name: Generate performance report
+        run: |
+          mkdir -p artifacts
+          echo "# Performance Benchmark Report" > artifacts/bench_report.md
+          echo "" >> artifacts/bench_report.md
+          echo "**Date**: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> artifacts/bench_report.md
+          echo "**Duration**: ${{ github.event.inputs.duration || '600' }}s" >> artifacts/bench_report.md
+          echo "" >> artifacts/bench_report.md
+          echo "## Results" >> artifacts/bench_report.md
+          echo "See attached artifacts for detailed metrics." >> artifacts/bench_report.md
+      
+      - name: Upload benchmark artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-artifacts-${{ github.run_id }}
+          path: |
+            artifacts/bench.json
+            artifacts/bench_report.md
+          retention-days: 90
+      
+      - name: Comment PR with results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('artifacts/bench_report.md', 'utf8');
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: report
+            });

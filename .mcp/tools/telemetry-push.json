@@ -1,0 +1,7 @@
+{
+  "name": "telemetry.push",
+  "version": "1.0.0",
+  "entry": "native://telemetry",
+  "permissions": ["emit"],
+  "description": "Push telemetry data with context propagation"
+}

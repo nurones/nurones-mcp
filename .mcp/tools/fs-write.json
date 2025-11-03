@@ -1,0 +1,7 @@
+{
+  "name": "fs.write",
+  "version": "1.1.0",
+  "entry": "wasm://examples/fs-write/target/wasm32-wasip1/release/fs_write.wasm",
+  "permissions": ["write"],
+  "description": "Write file content with context-governed IO (WASI)"
+}

@@ -1,0 +1,25 @@
+# Code Owners for Nurones MCP
+# These owners will be automatically requested for review when PRs modify these paths
+
+# Core Runtime (Rust)
+/mcp-core/           @nurones/arch @nurones/rust
+/examples/           @nurones/arch @nurones/rust
+
+# SDK & Integrations
+/sdk-node/           @nurones/js
+/vscode-extension/   @nurones/js
+
+# Web UI
+/admin-web/          @nurones/web
+
+# Configuration & Tools
+/.mcp/               @nurones/arch
+/.github/            @nurones/arch
+
+# Documentation
+/*.md                @nurones/arch
+/artifacts/          @nurones/arch
+
+# Contracts (requires architecture review)
+/mcp-core/src/contracts.rs  @nurones/arch
+/sdk-node/src/contracts.ts  @nurones/arch

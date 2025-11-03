@@ -1,0 +1,21 @@
+{
+  "profile": "dev",
+  "transports": ["stdio", "ws"],
+  "rbac": {
+    "defaultRole": "operator"
+  },
+  "observability": {
+    "otelExporter": "http://localhost:4318",
+    "prometheusPort": 9464
+  },
+  "contextEngine": {
+    "enabled": true,
+    "changeCapPctPerDay": 10,
+    "minConfidence": 0.6
+  },
+  "performance": {
+    "maxInflight": 2048,
+    "batchSize": 64,
+    "queueWatermark": 0.75
+  }
+}

@@ -1,0 +1,88 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Install wasm32-wasip1 target
+        run: rustup target add wasm32-wasip1
+      
+      - name: Build Rust binaries
+        run: |
+          cd mcp-core
+          cargo build --release
+          mkdir -p ../dist
+          cp target/release/nurones-mcp ../dist/
+      
+      - name: Build WASI tools
+        run: |
+          cd examples/fs-read
+          cargo build --release --target wasm32-wasip1
+          cp target/wasm32-wasip1/release/fs_read.wasm ../../dist/
+          
+          cd ../fs-write
+          cargo build --release --target wasm32-wasip1
+          cp target/wasm32-wasip1/release/fs_write.wasm ../../dist/
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Build SDK
+        run: |
+          cd sdk-node
+          npm ci
+          npm run build
+          tar -czf ../dist/nurones-mcp-sdk-${{ github.ref_name }}.tar.gz dist/ package.json README.md
+      
+      - name: Build VS Code extension
+        run: |
+          cd vscode-extension
+          npm ci
+          npm run build
+          npm install -g @vscode/vsce
+          vsce package
+          cp *.vsix ../dist/
+      
+      - name: Build Admin Web
+        run: |
+          cd admin-web
+          npm ci
+          npm run build
+          tar -czf ../dist/nurones-mcp-admin-${{ github.ref_name }}.tar.gz .next/ package.json
+      
+      - name: Generate checksums
+        run: |
+          cd dist
+          sha256sum * > checksums.txt
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/nurones-mcp
+            dist/*.wasm
+            dist/*.vsix
+            dist/*.tar.gz
+            dist/checksums.txt
+          body_path: CHANGELOG.md
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
