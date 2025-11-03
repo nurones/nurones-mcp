@@ -1,9 +1,10 @@
 use crate::types::{ContextFrame, EventMetadata, EventResponse};
 use async_trait::async_trait;
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
+use tokio::sync::RwLock;
+use std::sync::Arc;
 use uuid::Uuid;
-use tokio::sync::mpsc::{channel, Sender, Receiver};
+use tokio::sync::mpsc::{channel, Sender};
 
 const QUEUE_CAPACITY: usize = 4096;
 const BATCH_SIZE: usize = 64;
@@ -93,7 +94,7 @@ impl InMemoryEventBus {
 
     /// Flush pending batch to storage
     async fn flush_batch(&self) -> anyhow::Result<Vec<EventResponse>> {
-        let mut batch = self.pending_batch.write().unwrap();
+        let mut batch = self.pending_batch.write().await;
         if batch.is_empty() {
             return Ok(Vec::new());
         }
@@ -121,11 +122,12 @@ impl EventBus for InMemoryEventBus {
             tracing::debug!("Event deferred due to backpressure");
         }
 
-        // Add to batch
-        let mut batch = self.pending_batch.write().unwrap();
-        batch.push(event.clone());
-        let should_flush = batch.len() >= BATCH_SIZE;
-        drop(batch);
+        // Add to batch and check if flush needed
+        let should_flush = {
+            let mut batch = self.pending_batch.write().await;
+            batch.push(event.clone());
+            batch.len() >= BATCH_SIZE
+        }; // Lock is dropped here
 
         // Flush if batch is full
         if should_flush {
@@ -147,16 +149,33 @@ impl EventBus for InMemoryEventBus {
     }
 
     fn queue_depth(&self) -> usize {
-        self.pending_batch.read().unwrap().len()
+        // Note: This is a sync method, so we use try_read() which returns immediately
+        self.pending_batch.try_read().map(|b| b.len()).unwrap_or(0)
     }
 
     async fn subscribe(&self, event_type: &str, handler: EventHandler) -> anyhow::Result<()> {
+        let mut handlers = self.handlers.write().await;
+        handlers
+            .entry(event_type.to_string())
+            .or_insert_with(Vec::new)
+            .push(handler);
+        Ok(())
+    }
+
+    async fn check_duplicate(&self, correlation_id: &str) -> anyhow::Result<Option<String>> {
+        let correlations = self.seen_correlations.read().await;
+        Ok(correlations.get(correlation_id).cloned())
+    }
+}
+
+impl InMemoryEventBus {
+    /// Internal publish method for actual event storage
+    async fn publish_internal(&self, event: Event) -> anyhow::Result<EventResponse> {
         // Check for duplicate
         if let Some(existing_id) = self.check_duplicate(&event.metadata.correlation_id).await? {
-            tracing::warn!("Duplicate event detected: {}", event.metadata.correlation_id);
-            tracing::warn!("Duplicate event detected: {}", event.metadata.correlation_id);
+            tracing::debug!("Duplicate event detected: {}", event.metadata.correlation_id);
             // Return existing event ID (idempotency)
-            let events = self.events.read().unwrap();
+            let events = self.events.read().await;
             if let Some(stored) = events.iter().find(|e| e.id == existing_id) {
                 return Ok(EventResponse {
                     event_id: stored.id.clone(),
@@ -174,7 +193,7 @@ impl EventBus for InMemoryEventBus {
         let event_id = Uuid::new_v4().to_string();
         let timestamp = chrono::Utc::now();
         
-        let mut events = self.events.write().unwrap();
+        let mut events = self.events.write().await;
         let version = events
             .iter()
             .filter(|e| e.stream_id == event.stream_id)
@@ -194,11 +213,11 @@ impl EventBus for InMemoryEventBus {
         events.push(stored);
 
         // Record correlation ID
-        let mut correlations = self.seen_correlations.write().unwrap();
+        let mut correlations = self.seen_correlations.write().await;
         correlations.insert(event.metadata.correlation_id.clone(), event_id.clone());
 
         // Trigger handlers
-        let handlers = self.handlers.read().unwrap();
+        let handlers = self.handlers.read().await;
         if let Some(handler_list) = handlers.get(&event.event_type) {
             for handler in handler_list {
                 if let Err(e) = handler(event.clone()) {
@@ -207,29 +226,12 @@ impl EventBus for InMemoryEventBus {
             }
         }
 
-    async fn check_duplicate(&self, correlation_id: &str) -> anyhow::Result<Option<String>> {
-        let correlations = self.seen_correlations.read().unwrap();
-        Ok(correlations.get(correlation_id).cloned())
-    }
-}
-
-impl InMemoryEventBus {
-    /// Internal publish method for actual event storage
-    async fn publish_internal(&self, event: Event) -> anyhow::Result<EventResponse> {
-        // Check for duplicate
-        if let Some(existing_id) = self.check_duplicate(&event.metadata.correlation_id).await? {
-            tracing::debug!("Duplicate event detected: {}", event.metadata.correlation_id);
-        let mut handlers = self.handlers.write().unwrap();
-        handlers
-            .entry(event_type.to_string())
-            .or_insert_with(Vec::new)
-            .push(handler);
-        Ok(())
-    }
-
-    async fn check_duplicate(&self, correlation_id: &str) -> anyhow::Result<Option<String>> {
-        let correlations = self.seen_correlations.read().unwrap();
-        Ok(correlations.get(correlation_id).cloned())
+        Ok(EventResponse {
+            event_id,
+            stream_id: event.stream_id,
+            version,
+            timestamp,
+        })
     }
 }
 
