@@ -44,10 +44,10 @@ VS Code: open `/extensions/vscode`, `npm i && npm run build`, then press <kbd>Ct
 
 ## 📚 Docs
 
-* **Quick Start:** [docs/QUICKSTART.md](docs/QUICKSTART.md)
-* **Architecture:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-* **Contributing:** [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md)
-* **Releases:** [docs/RELEASES.md](docs/RELEASES.md)
+* **Quick Start:** [docs/guides/QUICKSTART.md](docs/guides/QUICKSTART.md)
+* **Architecture:** [docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md)
+* **Contributing:** [docs/governance/CONTRIBUTING.md](docs/governance/CONTRIBUTING.md)
+* **Releases:** [docs/governance/RELEASES.md](docs/governance/RELEASES.md)
 * **Phase notes (archive):** [docs/archive/](docs/archive/)
 
 ## 🔌 Extension Naming
