@@ -76,7 +76,7 @@
 **Code Owners** ([`CODEOWNERS`](CODEOWNERS))
 - ✅ `/mcp-core/` → @nurones/arch @nurones/rust
 - ✅ `/sdk-node/` → @nurones/js
-- ✅ `/vscode-extension/` → @nurones/js
+- ✅ `/extensions/vscode/` → @nurones/js
 - ✅ `/admin-web/` → @nurones/web
 - ✅ `/.mcp/` → @nurones/arch
 - ✅ Contract files require architecture review

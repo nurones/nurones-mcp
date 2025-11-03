@@ -194,7 +194,7 @@ ls -la .figma/fe-design/
 
 ```bash
 # Register extension
-qoder ext add ./qoder-integration/extension.json
+qoder ext add ./extensions/qoder/extension.json
 
 # Test commands
 qoder run nurones.mcp.openDashboard

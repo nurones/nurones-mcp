@@ -52,7 +52,7 @@ jobs:
       
       - name: Build VS Code extension
         run: |
-          cd vscode-extension
+          cd extensions/vscode
           npm ci
           npm run build
           npm install -g @vscode/vsce

@@ -48,7 +48,7 @@ nurones-mcp/
 │   │       └── globals.css         # Global styles
 │   └── .next/                      # Build output (gitignored)
 │
-├── qoder-integration/              # Qoder Extension Manifest
+├── extensions/qoder/              # Qoder Extension Manifest
 │   └── extension.json              # Commands, telemetry config
 │
 ├── .figma/                         # Figma → React Exports
@@ -103,7 +103,7 @@ nurones-mcp/
 - **Note:** Production UI will replace with Figma exports
 - **License:** MIT
 
-### 4. **qoder-integration**
+### 4. **extensions/qoder**
 - **Primary:** Qoder Platform extension manifest
 - **Commands:**
   - `nurones.mcp.openDashboard`
@@ -127,7 +127,7 @@ nurones-mcp/
 | `mcp-core/src/main.rs` | Server entry point | ⭐⭐⭐ |
 | `sdk-node/src/index.ts` | Contract interfaces | ⭐⭐⭐ |
 | `.mcp/config.json` | Runtime configuration | ⭐⭐⭐ |
-| `qoder-integration/extension.json` | Qoder manifest | ⭐⭐ |
+| `extensions/qoder/extension.json` | Qoder manifest | ⭐⭐ |
 | `admin-web/src/app/page.tsx` | Admin UI | ⭐ |
 | `BOOTSTRAP.md` | Setup instructions | ⭐⭐ |
 

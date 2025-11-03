@@ -7,7 +7,8 @@
 
 # SDK & Integrations
 /sdk-node/           @nurones/js
-/vscode-extension/   @nurones/js
+/extensions/vscode/  @nurones/js
+/extensions/qoder/   @nurones/arch
 
 # Web UI
 /admin-web/          @nurones/web

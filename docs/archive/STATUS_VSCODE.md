@@ -44,7 +44,7 @@ nurones-mcp/
 │   │   └── main.rs             # Server entry
 │   └── Cargo.toml
 │
-├── vscode-extension/           # VS Code Extension ✅ NEW
+├── extensions/vscode/           # VS Code Extension ✅ NEW
 │   ├── src/
 │   │   └── extension.ts        # Main extension logic
 │   ├── package.json
@@ -59,7 +59,7 @@ nurones-mcp/
 │   ├── src/app/page.tsx        # 5-tab dashboard
 │   └── package.json
 │
-├── qoder-integration/          # Qoder Integration ✅ (Secondary)
+├── extensions/qoder/          # Qoder Integration ✅ (Secondary)
 │   └── extension.json
 │
 ├── .mcp/                       # Configuration ✅
@@ -87,7 +87,7 @@ cd mcp-core
 cargo build --release
 
 # 2. Install VS Code extension
-cd ../vscode-extension
+cd ../extensions/vscode
 npm install
 npm run build
 
@@ -200,7 +200,7 @@ Add to `.vscode/settings.json`:
 - Testing host compatibility
 
 **No Changes Needed:**
-- `qoder-integration/extension.json` remains valid
+- `extensions/qoder/extension.json` remains valid
 - All 4 commands still registered
 - Telemetry channel configured
 - Can run alongside VS Code
@@ -221,7 +221,7 @@ Add to `.vscode/settings.json`:
 
 ```bash
 # Register extension
-qoder ext add ./qoder-integration/extension.json
+qoder ext add ./extensions/qoder/extension.json
 
 # Use commands
 qoder run nurones.mcp.openDashboard
@@ -320,7 +320,7 @@ qoder run nurones.mcp.execTool --name fs.read
 ./quickstart.sh
 
 # VS Code extension development
-cd vscode-extension && npm install && npm run watch
+cd extensions/vscode && npm install && npm run watch
 
 # Start observability
 docker-compose up -d
@@ -341,7 +341,7 @@ docker-compose up -d
 
 ### What Changed Since Last Report
 
-1. **NEW: VS Code Extension** (`vscode-extension/`)
+1. **NEW: VS Code Extension** (`extensions/vscode/`)
    - Full implementation with 347 lines of TypeScript
    - 5 commands, status bar, output channel
    - Filesystem validation, log redaction

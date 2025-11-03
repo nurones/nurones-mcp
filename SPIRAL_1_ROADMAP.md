@@ -183,8 +183,8 @@
 1. **WASI Runtime** (`mcp-core/src/wasi_executor.rs`)
 2. **WASI Tools** (`tools-wasm/*.wasm`)
 3. **Performance Benchmarks** (`benchmarks/results.md`)
-4. **VS Code Dashboard Panel** (`vscode-extension/src/dashboard.ts`)
-5. **Integration Tests** (`vscode-extension/tests/*.test.ts`)
+4. **VS Code Dashboard Panel** (`extensions/vscode/src/dashboard.ts`)
+5. **Integration Tests** (`extensions/vscode/tests/*.test.ts`)
 6. **Updated Documentation** (all READMEs, guides)
 
 ---

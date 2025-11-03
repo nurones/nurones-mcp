@@ -35,7 +35,7 @@ build-web:
 # Build VS Code extension
 build-vscode:
 	@echo "Building VS Code extension..."
-	cd vscode-extension && npm install && npm run build
+	cd extensions/vscode && npm install && npm run build
 
 # Run tests
 test:
@@ -57,7 +57,7 @@ clean:
 	cd examples/fs-write && cargo clean
 	cd sdk-node && rm -rf dist node_modules
 	cd admin-web && rm -rf .next node_modules
-	cd vscode-extension && rm -rf dist node_modules
+	cd extensions/vscode && rm -rf dist node_modules
 
 # Start development environment
 dev-start: build

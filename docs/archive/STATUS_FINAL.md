@@ -73,8 +73,8 @@
 - `sdk-node/vitest.config.ts` - **NEW** Test configuration
 
 ### VS Code Extension
-- `vscode-extension/src/extension.ts` - Main extension (347 lines)
-- `vscode-extension/package.json` - Extension manifest
+- `extensions/vscode/src/extension.ts` - Main extension (347 lines)
+- `extensions/vscode/package.json` - Extension manifest
 
 ### Admin Web
 - `admin-web/src/app/page.tsx` - 5-tab dashboard

@@ -113,7 +113,7 @@ test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured
 
 2. **Launch VS Code** (in another terminal):
    ```bash
-   cd vscode-extension
+   cd extensions/vscode
    npm install && npm run build
    code --extensionDevelopmentPath=$(pwd) ..
    ```

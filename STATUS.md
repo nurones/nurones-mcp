@@ -71,10 +71,10 @@
 - ✅ Figma integration path (`.figma/fe-design/`)
 
 ### 4. Qoder Integration
-**Location:** `qoder-integration/`
+**Location:** `extensions/qoder/`
 
 ✅ **Implemented:**
-- ✅ Extension manifest ([`extension.json`](qoder-integration/extension.json))
+- ✅ Extension manifest ([`extension.json`](extensions/qoder/extension.json))
 - ✅ 4 commands registered:
   - `nurones.mcp.openDashboard`
   - `nurones.mcp.execTool`

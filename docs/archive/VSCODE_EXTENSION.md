@@ -28,7 +28,7 @@ The **Nurones MCP VS Code Extension** is the **primary host** for the MCP runtim
 
 #### Development Mode
 ```bash
-cd vscode-extension
+cd extensions/vscode
 npm install
 npm run build
 code --extensionDevelopmentPath=$(pwd) /path/to/your/workspace
@@ -36,7 +36,7 @@ code --extensionDevelopmentPath=$(pwd) /path/to/your/workspace
 
 #### Package & Install
 ```bash
-cd vscode-extension
+cd extensions/vscode
 npm install
 npm run pack
 code --install-extension nurones-mcp-0.5.0.vsix
@@ -283,7 +283,7 @@ Each VS Code operation creates a unique ContextFrame:
 1. Check VS Code version: `1.90.0+` required
 2. Rebuild extension:
    ```bash
-   cd vscode-extension
+   cd extensions/vscode
    npm run build
    ```
 
@@ -339,11 +339,11 @@ With VS Code as primary host, proceed with:
 
 ## Qoder Integration (Secondary Host)
 
-The Qoder integration remains available at `qoder-integration/extension.json`:
+The Qoder integration remains available at `extensions/qoder/extension.json`:
 
 ```bash
 # Register with Qoder
-qoder ext add ./qoder-integration/extension.json
+qoder ext add ./extensions/qoder/extension.json
 
 # Use Qoder commands
 qoder run nurones.mcp.openDashboard
@@ -359,7 +359,7 @@ qoder run nurones.mcp.execTool --name fs.read
 - **Issues**: GitHub Issues
 - **Logs**: VS Code Output Channel → "Nurones MCP"
 - **Status**: Click status bar item
-- **Documentation**: `/vscode-extension/README.md`
+- **Documentation**: `/extensions/vscode/README.md`
 
 ---
 

@@ -21,7 +21,7 @@ cd nurones-mcp
 ./quickstart.sh
 ```
 
-VS Code: open `/vscode-extension`, `npm i && npm run build`, then press <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> → "Nurones MCP".
+VS Code: open `/extensions/vscode`, `npm i && npm run build`, then press <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> → "Nurones MCP".
 
 ## 🧩 Architecture
 
@@ -29,8 +29,8 @@ VS Code: open `/vscode-extension`, `npm i && npm run build`, then press <kbd>Ctr
 | ---------------------- | ------------ | --------------------------------------- |
 | **mcp-core/**          | Rust (Tokio) | Event bus, ContextFrame, WASI tools     |
 | **sdk-node/**          | TypeScript   | Contracts, schemas, integration helpers |
-| **vscode-extension/**  | TypeScript   | Primary host (developer UX)             |
-| **qoder-integration/** | JSON         | Secondary host integration              |
+| **extensions/vscode/**  | TypeScript   | Primary host (developer UX)             |
+| **extensions/qoder/** | JSON         | Secondary host integration              |
 | **admin-web/**         | React/Next   | Telemetry + governance                  |
 | **.mcp/**              | JSON         | Config + tool manifests                 |
 
@@ -49,6 +49,12 @@ VS Code: open `/vscode-extension`, `npm i && npm run build`, then press <kbd>Ctr
 * **Contributing:** [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md)
 * **Releases:** [docs/RELEASES.md](docs/RELEASES.md)
 * **Phase notes (archive):** [docs/archive/](docs/archive/)
+
+## 🔌 Extension Naming
+
+- Publish as `@nurones/mcp-ext-<name>`
+- Place source in `extensions/<name>/`
+- Reuse contracts from `sdk-node`
 
 ## 🌍 Community
 

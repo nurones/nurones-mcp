@@ -7,7 +7,7 @@
 cd mcp-core && cargo build --release
 
 # 2. Install Extension
-cd ../vscode-extension && npm install && npm run build
+cd ../extensions/vscode && npm install && npm run build
 
 # 3. Open in VS Code
 code --extensionDevelopmentPath=$(pwd) /path/to/workspace
@@ -72,7 +72,7 @@ cd mcp-core && cargo build --release
 Ctrl+Shift+P → "Developer: Reload Window"
 
 # Rebuild extension
-cd vscode-extension && npm run build
+cd extensions/vscode && npm run build
 ```
 
 ### View logs
