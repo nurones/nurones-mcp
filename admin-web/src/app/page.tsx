@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { fetchServerStatus, toggleContextEngine, fetchTools, toggleTool, virtualConnectorHealth, virtualConnect, virtualDisconnect, type ServerStatus, type Connection, type Tool } from './api'
+import { fetchServerStatus, toggleContextEngine, fetchTools, toggleTool, virtualConnectorHealth, virtualConnect, virtualDisconnect, fetchExtensionModules, type ServerStatus, type Connection, type Tool, type ExtensionModule } from './api'
 import dynamic from 'next/dynamic'
 
 const PoliciesPage = dynamic(() => import('./policies/page'), { ssr: false })
@@ -324,14 +324,14 @@ function ToolsTab() {
 }
 
 function ExtensionsTab() {
-  const [tools, setTools] = useState<Tool[]>([])
+  const [extensions, setExtensions] = useState<ExtensionModule[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const loadExtensions = async () => {
       try {
-        const data = await fetchTools()
-        setTools(data)
+        const data = await fetchExtensionModules()
+        setExtensions(data)
       } catch (err) {
         console.error('Failed to fetch extensions:', err)
       } finally {
@@ -346,22 +346,40 @@ function ExtensionsTab() {
   return (
     <div className="space-y-6">
       <h2 className="text-xl font-semibold">MCP Extensions</h2>
-      <p className="text-sm text-gray-400">Registered tool manifests discovered under <code className="text-cyan-400">.mcp/tools</code>.</p>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {tools.map((tool) => (
-          <div key={tool.name} className="bg-gray-800 rounded-lg p-6">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-cyan-400">{tool.name}</h3>
-              <span className="px-2 py-1 text-xs bg-gray-700 rounded">{tool.version}</span>
-            </div>
-            <div className="mt-3 text-sm text-gray-300">
-              <div>Type: <span className="px-2 py-1 text-xs bg-gray-700 rounded">{tool.tool_type}</span></div>
-              <div className="mt-1">Permissions: {tool.permissions.join(', ')}</div>
-              <div className="mt-1">Status: <span className={`px-2 py-1 text-xs font-medium rounded ${tool.enabled ? 'bg-green-900 text-green-300' : 'bg-gray-700 text-gray-400'}`}>{tool.enabled ? 'enabled' : 'disabled'}</span></div>
-            </div>
+      <p className="text-sm text-gray-400">Extension modules grouped by entry point from <code className="text-cyan-400">.mcp/tools</code>.</p>
+      
+      {extensions.length === 0 && (
+        <div className="text-center py-8 text-gray-400">No extensions found</div>
+      )}
+      
+      {extensions.map((ext) => (
+        <div key={ext.entry} className="bg-gray-800 rounded-lg p-6">
+          <div className="mb-4">
+            <h3 className="text-lg font-semibold text-cyan-400">Module: {ext.entry}</h3>
+            <p className="text-sm text-gray-400 mt-1">{ext.tools.length} tool{ext.tools.length !== 1 ? 's' : ''}</p>
           </div>
-        ))}
-      </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {ext.tools.map((tool) => (
+              <div key={tool.name} className="bg-gray-700 rounded p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-medium text-white">{tool.name}</span>
+                  <span className="px-2 py-1 text-xs bg-gray-600 rounded">{tool.version}</span>
+                </div>
+                <div className="text-sm text-gray-300 space-y-1">
+                  <div>Type: <span className="px-2 py-1 text-xs bg-gray-600 rounded">{tool.tool_type}</span></div>
+                  <div>Permissions: {tool.permissions.join(', ')}</div>
+                  <div>
+                    Status: <span className={`px-2 py-1 text-xs font-medium rounded ${tool.enabled ? 'bg-green-900 text-green-300' : 'bg-gray-600 text-gray-400'}`}>
+                      {tool.enabled ? 'enabled' : 'disabled'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   )
 }
