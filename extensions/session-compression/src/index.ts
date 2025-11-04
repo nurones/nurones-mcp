@@ -18,6 +18,8 @@ import { compressDigest, formatSessionDigest } from './compressor';
 import { LLMCompressor, CompressionTier } from './llm-compressor';
 import { QualityScorer } from './quality-scorer';
 import { NotionFetcher } from './notion-client';
+import { IdempotencyManager } from './idempotency';
+import { Logger } from './logger';
 
 const DEFAULT_OUTPUT_DIR = '/tmp/summaries';
 const DEFAULT_TIMEZONE = 'Australia/Adelaide';
@@ -98,7 +100,16 @@ async function processSource(
       // Rollback if quality too low
       if (options.qualityScorer.shouldRollback(score)) {
         const fallbackTier = options.qualityScorer.getFallbackTier();
-        console.warn(`Quality check failed (${(score.rougeL * 100).toFixed(1)}% < ${(score.threshold * 100).toFixed(0)}%). Rolling back ${tier} → ${fallbackTier}`);
+        const logger = new Logger({
+          session_id: sessionId,
+          operation: 'quality_rollback'
+        });
+        logger.warn('Quality check failed, rolling back', {
+          tier,
+          quality_score: (score.rougeL * 100).toFixed(1) + '%',
+          threshold: (score.threshold * 100).toFixed(0) + '%',
+          fallback_tier: fallbackTier
+        });
         
         // Retry with fallback tier
         if (fallbackTier === 'T0') {
@@ -231,15 +242,61 @@ function buildTimeline(
 }
 
 /**
- * Main compression function
+ * Main compression function with idempotency
  */
 export async function compressSession(input: CompressInputV1): Promise<CompressOutputV1> {
+  // Initialize logger with context
+  const logger = new Logger({
+    reason_trace_id: input.reason_trace_id,
+    tenant_id: input.tenant_id,
+    operation: 'session.compress'
+  });
+  
+  logger.info('Starting session compression', {
+    sources: input.sources.length,
+    char_limit: input.char_limit,
+    tier: input.compression_tier || 'T0'
+  });
+  
   const outputDir = input.output_dir || DEFAULT_OUTPUT_DIR;
   const timezone = input.timezone || DEFAULT_TIMEZONE;
   const preserveMarkup = input.preserve_markup ?? false;
   const dryRun = input.dry_run ?? false;
   const tier: CompressionTier = input.compression_tier || 'T0';
   const enableQualityCheck = input.enable_quality_check ?? false;
+  
+  // Idempotency check
+  const idempotency = new IdempotencyManager();
+  const idempKey = idempotency.generateKey(
+    input.tenant_id,
+    input.reason_trace_id,
+    input.sources,
+    input.char_limit,
+    outputDir
+  );
+  
+  // Check for duplicate
+  if (idempotency.isDuplicate(idempKey.key)) {
+    const existing = idempotency.getExistingResult(idempKey.key);
+    logger.warn('Duplicate request detected', {
+      idempotency_key: idempKey.key.slice(0, 12) + '...',
+      original_processed: existing?.metadata.processed
+    });
+    
+    // Return minimal response for duplicate
+    return {
+      report: {
+        processed: existing?.metadata.processed || 0,
+        written: 0, // Already written previously
+        dry_run: true,
+        timeline_updated: false,
+        duplicate_request: true
+      },
+      summaries: [],
+      index_path: undefined,
+      timeline_path: undefined
+    } as any; // Type assertion needed for duplicate_request field
+  }
   
   // Initialize Path B components if tier > T0
   let llmCompressor: LLMCompressor | undefined;
@@ -253,9 +310,10 @@ export async function compressSession(input: CompressInputV1): Promise<CompressO
     });
     
     if (!llmCompressor.isAvailable()) {
-      console.warn('LLM not available, falling back to T0');
-      // Don't initialize, will fall back to T0 in processSource
+      logger.warn('LLM not available, falling back to T0', { requested_tier: tier });
       llmCompressor = undefined;
+    } else {
+      logger.info('LLM compressor initialized', { tier, provider: input.llm_config?.provider || 'openai' });
     }
   }
   
@@ -268,8 +326,10 @@ export async function compressSession(input: CompressInputV1): Promise<CompressO
   if (hasNotionSource) {
     notionFetcher = new NotionFetcher();
     if (!notionFetcher.isAvailable()) {
+      logger.error('Notion API key not configured');
       throw new Error('Notion API key not configured. Set NOTION_API_KEY environment variable.');
     }
+    logger.info('Notion fetcher initialized');
   }
   
   // Process all sources
@@ -310,7 +370,7 @@ export async function compressSession(input: CompressInputV1): Promise<CompressO
   const indexPath = buildIndex(summaries, outputDir, dryRun);
   const timelinePath = buildTimeline(summaries, outputDir, dryRun);
   
-  return {
+  const result: CompressOutputV1 = {
     report: {
       processed: summaries.length,
       written: dryRun ? 0 : summaries.length,
@@ -325,4 +385,25 @@ export async function compressSession(input: CompressInputV1): Promise<CompressO
     index_path: indexPath,
     timeline_path: timelinePath
   };
+  
+  // Store idempotency record (even for dry-run to prevent duplicate processing)
+  if (!dryRun) {
+    idempotency.storeResult(idempKey, result);
+    logger.info('Idempotency record stored', { key: idempKey.key.slice(0, 12) + '...' });
+  }
+  
+  // Cleanup old idempotency records (TTL: 24 hours)
+  const cleaned = idempotency.cleanup(24);
+  if (cleaned > 0) {
+    logger.debug('Cleaned up old idempotency records', { count: cleaned });
+  }
+  
+  logger.info('Session compression complete', {
+    processed: summaries.length,
+    written: result.report.written,
+    total_cost: result.report.total_cost,
+    avg_quality: result.report.avg_quality_score
+  });
+  
+  return result;
 }

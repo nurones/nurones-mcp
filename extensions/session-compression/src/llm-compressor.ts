@@ -2,6 +2,12 @@ import OpenAI from 'openai';
 
 export type CompressionTier = 'T0' | 'T1' | 'T2' | 'T3';
 
+interface RetryConfig {
+  maxRetries: number;
+  baseDelayMs: number;
+  maxDelayMs: number;
+}
+
 export interface LLMConfig {
   provider: 'openai' | 'anthropic';
   apiKey?: string;
@@ -31,6 +37,12 @@ const DEFAULT_CONFIG: LLMConfig = {
   }
 };
 
+const RETRY_CONFIG: RetryConfig = {
+  maxRetries: 3,
+  baseDelayMs: 1000,
+  maxDelayMs: 10000
+};
+
 export class LLMCompressor {
   private client: OpenAI | null = null;
   private config: LLMConfig;
@@ -46,13 +58,21 @@ export class LLMCompressor {
   }
 
   /**
-   * Compress content using specified tier
+   * Compress content using specified tier with retry logic
    */
   async compress(
     content: string,
     tier: CompressionTier,
     charLimit: number
   ): Promise<LLMCompressionResult> {
+    // Input validation
+    if (!content || content.trim().length === 0) {
+      throw new Error('Content cannot be empty');
+    }
+    if (charLimit < 10 || charLimit > 100000) {
+      throw new Error('Character limit must be between 10 and 100000');
+    }
+
     if (tier === 'T0') {
       // T0 is extractive - no LLM needed
       return {
@@ -72,28 +92,93 @@ export class LLMCompressor {
       throw new Error(`No configuration for tier ${tier}`);
     }
 
-    const prompt = this.buildPrompt(content, tier, charLimit);
-    
-    const response = await this.client.chat.completions.create({
-      model: tierConfig.model,
-      messages: [
-        { role: 'system', content: this.getSystemPrompt(tier) },
-        { role: 'user', content: prompt }
-      ],
-      max_tokens: tierConfig.maxTokens,
-      temperature: tierConfig.temperature || 0.3
+    // Execute with retry logic
+    return this.executeWithRetry(async () => {
+      const prompt = this.buildPrompt(content, tier, charLimit);
+      
+      const response = await this.client!.chat.completions.create({
+        model: tierConfig.model,
+        messages: [
+          { role: 'system', content: this.getSystemPrompt(tier) },
+          { role: 'user', content: prompt }
+        ],
+        max_tokens: tierConfig.maxTokens,
+        temperature: tierConfig.temperature || 0.3
+      }, {
+        timeout: 30000 // 30 second timeout in options
+      });
+
+      const summary = response.choices[0]?.message?.content || '';
+      const tokensUsed = response.usage?.total_tokens || 0;
+
+      if (!summary) {
+        throw new Error('LLM returned empty response');
+      }
+
+      return {
+        summary,
+        tier,
+        tokensUsed,
+        model: tierConfig.model,
+        cost: this.estimateCost(tierConfig.model, tokensUsed)
+      };
     });
+  }
 
-    const summary = response.choices[0]?.message?.content || '';
-    const tokensUsed = response.usage?.total_tokens || 0;
+  /**
+   * Execute function with exponential backoff retry
+   */
+  private async executeWithRetry<T>(
+    fn: () => Promise<T>,
+    attempt: number = 0
+  ): Promise<T> {
+    try {
+      return await fn();
+    } catch (error: any) {
+      // Don't retry on non-retryable errors
+      if (this.isNonRetryableError(error)) {
+        throw error;
+      }
 
-    return {
-      summary,
-      tier,
-      tokensUsed,
-      model: tierConfig.model,
-      cost: this.estimateCost(tierConfig.model, tokensUsed)
-    };
+      // Check if we've exhausted retries
+      if (attempt >= RETRY_CONFIG.maxRetries) {
+        throw new Error(`Failed after ${RETRY_CONFIG.maxRetries} retries: ${error.message}`);
+      }
+
+      // Calculate exponential backoff delay
+      const delay = Math.min(
+        RETRY_CONFIG.baseDelayMs * Math.pow(2, attempt),
+        RETRY_CONFIG.maxDelayMs
+      );
+
+      console.warn(`LLM request failed (attempt ${attempt + 1}/${RETRY_CONFIG.maxRetries + 1}): ${error.message}. Retrying in ${delay}ms...`);
+
+      await this.sleep(delay);
+      return this.executeWithRetry(fn, attempt + 1);
+    }
+  }
+
+  /**
+   * Check if error is non-retryable
+   */
+  private isNonRetryableError(error: any): boolean {
+    // Don't retry on authentication errors
+    if (error.status === 401 || error.status === 403) {
+      return true;
+    }
+    // Don't retry on invalid request errors
+    if (error.status === 400 || error.status === 422) {
+      return true;
+    }
+    // Retry on rate limits and server errors
+    return false;
+  }
+
+  /**
+   * Sleep helper
+   */
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   /**
