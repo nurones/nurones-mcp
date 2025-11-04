@@ -345,11 +345,18 @@ function ExtensionsTab() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-xl font-semibold">MCP Extensions</h2>
-      <p className="text-sm text-gray-400">Extension modules grouped by entry point from <code className="text-cyan-400">.mcp/tools</code>.</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-semibold">MCP Server Extensions</h2>
+          <p className="text-sm text-gray-400 mt-1">Server-side tool modules with manifests in <code className="text-cyan-400">.mcp/tools/</code></p>
+        </div>
+      </div>
       
       {extensions.length === 0 && (
-        <div className="text-center py-8 text-gray-400">No extensions found</div>
+        <div className="bg-gray-800 rounded-lg p-6 text-center">
+          <p className="text-gray-400">No MCP extensions registered</p>
+          <p className="text-sm text-gray-500 mt-2">Add manifests to <code>.mcp/tools/</code> to register extensions</p>
+        </div>
       )}
       
       {extensions.map((ext) => (
@@ -380,6 +387,21 @@ function ExtensionsTab() {
           </div>
         </div>
       ))}
+      
+      <div className="bg-blue-900/20 border border-blue-700 rounded-lg p-4">
+        <div className="flex items-start gap-3">
+          <span className="text-blue-400 text-xl">ℹ️</span>
+          <div className="flex-1">
+            <h4 className="font-semibold text-blue-400">IDE Plugins vs MCP Extensions</h4>
+            <p className="text-sm text-gray-300 mt-1">
+              <strong>MCP Server Extensions</strong> (shown above) are server-side tools with manifests in <code className="text-cyan-400">.mcp/tools/</code>.
+            </p>
+            <p className="text-sm text-gray-300 mt-1">
+              <strong>IDE Plugins</strong> (VS Code, Qoder) are client-side integrations located in <code className="text-cyan-400">plugins/</code> and don't register with the MCP server.
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

@@ -16,7 +16,7 @@ This extension brings the self-adaptive Model Context Protocol (MCP) runtime to 
 ### From Source
 
 ```bash
-cd extensions/qoder
+cd plugins/qoder
 npm install
 npm run build
 ```

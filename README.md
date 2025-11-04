@@ -21,9 +21,9 @@ cd nurones-mcp
 ./quickstart.sh
 ```
 
-**VS Code**: open `/extensions/vscode`, `npm i && npm run build`, then press <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> → "Nurones MCP".
+**VS Code**: open `/plugins/vscode`, `npm i && npm run build`, then press <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> → "Nurones MCP".
 
-**Qoder**: open `/extensions/qoder`, `npm i && npm run build`, then access via Qoder Command Palette → "Nurones MCP".
+**Qoder**: open `/plugins/qoder`, `npm i && npm run build`, then access via Qoder Command Palette → "Nurones MCP".
 
 ## 🧩 Architecture
 
@@ -31,8 +31,8 @@ cd nurones-mcp
 | ---------------------- | ------------ | --------------------------------------- |
 | **mcp-core/**          | Rust (Tokio) | Event bus, ContextFrame, WASI tools     |
 | **sdk-node/**          | TypeScript   | Contracts, schemas, integration helpers |
-| **extensions/vscode/** | TypeScript   | VS Code integration (developer UX)      |
-| **extensions/qoder/**  | TypeScript   | Qoder IDE integration (AI-native UX)    |
+| **plugins/vscode/** | TypeScript   | VS Code integration (developer UX)      |
+| **plugins/qoder/**  | TypeScript   | Qoder IDE integration (AI-native UX)    |
 | **admin-web/**         | React/Next   | Telemetry + governance                  |
 | **.mcp/**              | JSON         | Config + tool manifests                 |
 

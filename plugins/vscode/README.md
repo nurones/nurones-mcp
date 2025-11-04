@@ -3,7 +3,7 @@
 ## Build & Test
 
 ```bash
-cd extensions/vscode
+cd plugins/vscode
 
 # Install dependencies
 npm install
@@ -22,7 +22,7 @@ npm run watch
 
 ### Option 1: Extension Development Host
 ```bash
-cd extensions/vscode
+cd plugins/vscode
 npm install
 npm run build
 code --extensionDevelopmentPath=$(pwd)
