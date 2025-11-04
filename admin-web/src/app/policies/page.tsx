@@ -28,7 +28,7 @@ export default function PoliciesPage() {
 
   const fetchPolicies = async () => {
     try {
-      const response = await fetch('http://localhost:4050/api/policies')
+      const response = await fetch('/api/policies')
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       const data = await response.json()
       setPolicies(data)
@@ -48,7 +48,7 @@ export default function PoliciesPage() {
     setSuccess(false)
 
     try {
-      const response = await fetch('http://localhost:4050/api/policies', {
+      const response = await fetch('/api/policies', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(policies),
