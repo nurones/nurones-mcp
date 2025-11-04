@@ -1,24 +1,80 @@
-import * as vscode from "vscode";
 import { spawn, ChildProcess } from "node:child_process";
 import * as path from "node:path";
 import * as fs from "node:fs";
 
+// Qoder API interfaces (compatible with VS Code API where possible)
+interface QoderExtensionContext {
+  subscriptions: Array<{ dispose(): void }>;
+  workspaceFolder?: QoderWorkspaceFolder;
+}
+
+interface QoderWorkspaceFolder {
+  uri: { fsPath: string };
+  name: string;
+}
+
+interface QoderStatusBarItem {
+  text: string;
+  tooltip?: string;
+  backgroundColor?: string;
+  command?: string;
+  show(): void;
+  hide(): void;
+  dispose(): void;
+}
+
+interface QoderOutputChannel {
+  appendLine(value: string): void;
+  show(): void;
+  hide(): void;
+  dispose(): void;
+}
+
+// Qoder global API (injected at runtime)
+declare const qoder: {
+  workspace: {
+    getConfiguration(section: string): any;
+    workspaceFolders?: QoderWorkspaceFolder[];
+  };
+  window: {
+    createStatusBarItem(alignment: string, priority: number): QoderStatusBarItem;
+    createOutputChannel(name: string): QoderOutputChannel;
+    showInformationMessage(message: string, ...items: string[]): Promise<string | undefined>;
+    showWarningMessage(message: string, ...items: string[]): Promise<string | undefined>;
+    showErrorMessage(message: string, ...items: string[]): Promise<string | undefined>;
+    showInputBox(options: { prompt?: string; placeHolder?: string }): Promise<string | undefined>;
+    createTerminal(options: { name: string; message?: string }): QoderTerminal;
+  };
+  commands: {
+    registerCommand(command: string, callback: (...args: any[]) => any): { dispose(): void };
+    executeCommand(command: string, ...args: any[]): Promise<any>;
+  };
+  env: {
+    openExternal(url: string): Promise<boolean>;
+  };
+};
+
+interface QoderTerminal {
+  show(): void;
+  dispose(): void;
+}
+
 let mcpProcess: ChildProcess | null = null;
-let statusBarItem: vscode.StatusBarItem;
+let statusBarItem: QoderStatusBarItem;
 let contextEngineEnabled = true;
-let outputChannel: vscode.OutputChannel;
+let outputChannel: QoderOutputChannel;
 let connectionId: string | null = null;
 let heartbeatInterval: NodeJS.Timeout | null = null;
 
 /**
- * Register this VS Code instance with the MCP server
+ * Register this Qoder instance with the MCP server
  */
 async function registerConnection(): Promise<void> {
-  const cfg = vscode.workspace.getConfiguration("nuronesMcp");
-  const adminWebUrl = cfg.get<string>("adminWebUrl") ?? "http://localhost:4050";
-  const apiUrl = adminWebUrl; // Same port now - unified server
+  const cfg = qoder.workspace.getConfiguration("nuronesMcp");
+  const adminWebUrl = cfg.get("adminWebUrl") ?? "http://localhost:4050";
+  const apiUrl = adminWebUrl.replace(':4050', ':4055'); // MCP API is on 4055
   
-  connectionId = `vscode-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  connectionId = `qoder-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   
   try {
     const response = await fetch(`${apiUrl}/api/connections`, {
@@ -26,7 +82,7 @@ async function registerConnection(): Promise<void> {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         id: connectionId,
-        type: 'vscode'
+        type: 'qoder'
       })
     });
     
@@ -52,14 +108,14 @@ async function registerConnection(): Promise<void> {
 }
 
 /**
- * Unregister this VS Code instance from the MCP server
+ * Unregister this Qoder instance from the MCP server
  */
 async function unregisterConnection(): Promise<void> {
   if (!connectionId) return;
   
-  const cfg = vscode.workspace.getConfiguration("nuronesMcp");
-  const adminWebUrl = cfg.get<string>("adminWebUrl") ?? "http://localhost:4050";
-  const apiUrl = adminWebUrl; // Same port - unified server
+  const cfg = qoder.workspace.getConfiguration("nuronesMcp");
+  const adminWebUrl = cfg.get("adminWebUrl") ?? "http://localhost:3001";
+  const apiUrl = adminWebUrl.replace(':3001', ':9464');
   
   try {
     await fetch(`${apiUrl}/api/connections/${connectionId}`, {
@@ -79,11 +135,11 @@ async function unregisterConnection(): Promise<void> {
 }
 
 /**
- * Create default ContextFrame for VS Code operations
+ * Create default ContextFrame for Qoder operations
  */
 function createDefaultContext(): any {
   return {
-    reason_trace_id: `vscode-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    reason_trace_id: `qoder-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
     tenant_id: "default",
     stage: "dev",
     risk_level: 0,
@@ -95,7 +151,7 @@ function createDefaultContext(): any {
 /**
  * Resolve workspace-relative path variables
  */
-function resolvePath(configPath: string, workspaceFolder?: vscode.WorkspaceFolder): string {
+function resolvePath(configPath: string, workspaceFolder?: QoderWorkspaceFolder): string {
   if (!workspaceFolder) {
     return configPath;
   }
@@ -105,7 +161,7 @@ function resolvePath(configPath: string, workspaceFolder?: vscode.WorkspaceFolde
 /**
  * Validate filesystem allowlist against workspace
  */
-function validateFsAllowlist(allowlist: string, workspaceFolder?: vscode.WorkspaceFolder): { valid: boolean; warnings: string[] } {
+function validateFsAllowlist(allowlist: string, workspaceFolder?: QoderWorkspaceFolder): { valid: boolean; warnings: string[] } {
   const warnings: string[] = [];
   const paths = allowlist.split(',').map(p => p.trim());
   
@@ -134,28 +190,28 @@ function validateFsAllowlist(allowlist: string, workspaceFolder?: vscode.Workspa
 /**
  * Start MCP server process
  */
-async function startMcpServer(context: vscode.ExtensionContext): Promise<boolean> {
-  const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+async function startMcpServer(context: QoderExtensionContext): Promise<boolean> {
+  const workspaceFolder = qoder.workspace.workspaceFolders?.[0];
   if (!workspaceFolder) {
-    vscode.window.showErrorMessage("No workspace folder open. Please open a folder first.");
+    qoder.window.showErrorMessage("No workspace folder open. Please open a folder first.");
     return false;
   }
 
-  const cfg = vscode.workspace.getConfiguration("nuronesMcp");
-  const serverBinary = resolvePath(cfg.get<string>("serverBinary") ?? "../mcp-core/target/release/nurones-mcp", workspaceFolder);
-  const serverConfig = resolvePath(cfg.get<string>("serverConfig") ?? "../.mcp/config.json", workspaceFolder);
-  const fsAllowlist = resolvePath(cfg.get<string>("fsAllowlist") ?? "${workspaceFolder},/tmp", workspaceFolder);
-  contextEngineEnabled = cfg.get<boolean>("contextEngine") ?? true;
+  const cfg = qoder.workspace.getConfiguration("nuronesMcp");
+  const serverBinary = resolvePath(cfg.get("serverBinary") ?? "../mcp-core/target/release/nurones-mcp", workspaceFolder);
+  const serverConfig = resolvePath(cfg.get("serverConfig") ?? "../.mcp/config.json", workspaceFolder);
+  const fsAllowlist = resolvePath(cfg.get("fsAllowlist") ?? "${workspaceFolder},/tmp", workspaceFolder);
+  contextEngineEnabled = cfg.get("contextEngine") ?? true;
 
   // Validate binary exists
   if (!fs.existsSync(serverBinary)) {
-    vscode.window.showErrorMessage(`MCP server binary not found: ${serverBinary}. Please build mcp-core first.`);
+    qoder.window.showErrorMessage(`MCP server binary not found: ${serverBinary}. Please build mcp-core first.`);
     return false;
   }
 
   // Validate config exists
   if (!fs.existsSync(serverConfig)) {
-    vscode.window.showErrorMessage(`MCP server config not found: ${serverConfig}`);
+    qoder.window.showErrorMessage(`MCP server config not found: ${serverConfig}`);
     return false;
   }
 
@@ -163,7 +219,7 @@ async function startMcpServer(context: vscode.ExtensionContext): Promise<boolean
   const { valid, warnings } = validateFsAllowlist(fsAllowlist, workspaceFolder);
   if (!valid) {
     warnings.forEach(w => outputChannel.appendLine(w));
-    const proceed = await vscode.window.showWarningMessage(
+    const proceed = await qoder.window.showWarningMessage(
       "Filesystem allowlist has warnings. Proceed?",
       "Yes", "No"
     );
@@ -223,16 +279,16 @@ async function startMcpServer(context: vscode.ExtensionContext): Promise<boolean
 
     mcpProcess.on("error", (err) => {
       outputChannel.appendLine(`MCP server error: ${err.message}`);
-      vscode.window.showErrorMessage(`MCP server failed: ${err.message}`);
+      qoder.window.showErrorMessage(`MCP server failed: ${err.message}`);
       updateStatusBar(false);
     });
 
     updateStatusBar(true);
-    vscode.window.showInformationMessage("Nurones MCP server started");
+    qoder.window.showInformationMessage("Nurones MCP server started");
     return true;
   } catch (error) {
     outputChannel.appendLine(`Failed to start server: ${error}`);
-    vscode.window.showErrorMessage(`Failed to start MCP server: ${error}`);
+    qoder.window.showErrorMessage(`Failed to start MCP server: ${error}`);
     return false;
   }
 }
@@ -254,25 +310,25 @@ function stopMcpServer(): void {
  */
 function updateStatusBar(running: boolean): void {
   if (running) {
-    statusBarItem.text = `$(check) Nurones MCP [${contextEngineEnabled ? "ON" : "OFF"}]`;
+    statusBarItem.text = `✓ Nurones MCP [${contextEngineEnabled ? "ON" : "OFF"}]`;
     statusBarItem.tooltip = `MCP Server Running\nContext Engine: ${contextEngineEnabled ? "ENABLED" : "DISABLED"}`;
     statusBarItem.backgroundColor = undefined;
   } else {
-    statusBarItem.text = "$(x) Nurones MCP [Stopped]";
+    statusBarItem.text = "✗ Nurones MCP [Stopped]";
     statusBarItem.tooltip = "MCP Server Stopped";
-    statusBarItem.backgroundColor = new vscode.ThemeColor("statusBarItem.errorBackground");
+    statusBarItem.backgroundColor = "#f44336";
   }
 }
 
 /**
- * Activate extension
+ * Activate extension (Qoder entry point)
  */
-export async function activate(context: vscode.ExtensionContext): Promise<void> {
-  outputChannel = vscode.window.createOutputChannel("Nurones MCP");
-  outputChannel.appendLine("Nurones MCP extension activated");
+export async function activate(context: QoderExtensionContext): Promise<void> {
+  outputChannel = qoder.window.createOutputChannel("Nurones MCP");
+  outputChannel.appendLine("Nurones MCP extension activated for Qoder IDE");
 
   // Create status bar item
-  statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+  statusBarItem = qoder.window.createStatusBarItem("right", 100);
   statusBarItem.command = "nurones.mcp.showStatus";
   statusBarItem.show();
   context.subscriptions.push(statusBarItem);
@@ -281,27 +337,27 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   // Register commands
   context.subscriptions.push(
-    vscode.commands.registerCommand("nurones.mcp.openDashboard", async () => {
-      const cfg = vscode.workspace.getConfiguration("nuronesMcp");
-      const url = cfg.get<string>("adminWebUrl") ?? "http://localhost:3000";
+    qoder.commands.registerCommand("nurones.mcp.openDashboard", async () => {
+      const cfg = qoder.workspace.getConfiguration("nuronesMcp");
+      const url = cfg.get("adminWebUrl") ?? "http://localhost:4050";
       outputChannel.appendLine(`Opening dashboard: ${url}`);
-      await vscode.env.openExternal(vscode.Uri.parse(url));
+      await qoder.env.openExternal(url);
     }),
 
-    vscode.commands.registerCommand("nurones.mcp.execTool", async () => {
+    qoder.commands.registerCommand("nurones.mcp.execTool", async () => {
       if (!mcpProcess) {
-        vscode.window.showWarningMessage("MCP server not running. Start it first.");
+        qoder.window.showWarningMessage("MCP server not running. Start it first.");
         return;
       }
 
-      const toolName = await vscode.window.showInputBox({
+      const toolName = await qoder.window.showInputBox({
         prompt: "Tool name (e.g., fs.read, fs.write, telemetry.push)",
         placeHolder: "fs.read",
       });
 
       if (!toolName) return;
 
-      const argsInput = await vscode.window.showInputBox({
+      const argsInput = await qoder.window.showInputBox({
         prompt: "Arguments (JSON)",
         placeHolder: '{"path": "/workspace/README.md"}',
       });
@@ -320,13 +376,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       outputChannel.appendLine(`Context: ${ctx.reason_trace_id}`);
       mcpProcess.stdin?.write(message + "\n");
 
-      vscode.window.showInformationMessage(`Sent tool execution: ${toolName} [${ctx.reason_trace_id}]`);
+      qoder.window.showInformationMessage(`Sent tool execution: ${toolName} [${ctx.reason_trace_id}]`);
     }),
 
-    vscode.commands.registerCommand("nurones.mcp.viewTrace", async () => {
-      const traceId = await vscode.window.showInputBox({
+    qoder.commands.registerCommand("nurones.mcp.viewTrace", async () => {
+      const traceId = await qoder.window.showInputBox({
         prompt: "Enter reason_trace_id to view",
-        placeHolder: "vscode-1234567890-abc",
+        placeHolder: "qoder-1234567890-abc",
       });
 
       if (!traceId) return;
@@ -334,37 +390,38 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       outputChannel.appendLine(`Viewing trace: ${traceId}`);
       outputChannel.show();
 
-      const terminal = vscode.window.createTerminal({
+      const terminal = qoder.window.createTerminal({
         name: `Nurones Trace: ${traceId}`,
         message: `Viewing context trace: ${traceId}\n\nCheck OTel Collector or Prometheus for full trace data.`,
       });
       terminal.show();
     }),
 
-    vscode.commands.registerCommand("nurones.mcp.toggleContextEngine", async () => {
+    qoder.commands.registerCommand("nurones.mcp.toggleContextEngine", async () => {
       contextEngineEnabled = !contextEngineEnabled;
       
-      const cfg = vscode.workspace.getConfiguration("nuronesMcp");
-      await cfg.update("contextEngine", contextEngineEnabled, vscode.ConfigurationTarget.Workspace);
+      const cfg = qoder.workspace.getConfiguration("nuronesMcp");
+      // Note: Qoder config update API may differ - adjust as needed
+      // await cfg.update("contextEngine", contextEngineEnabled);
 
       outputChannel.appendLine(`Context Engine toggled: ${contextEngineEnabled ? "ON" : "OFF"}`);
 
       if (mcpProcess) {
-        vscode.window.showInformationMessage(
+        const choice = await qoder.window.showInformationMessage(
           `Context Engine ${contextEngineEnabled ? "enabled" : "disabled"}. Restart server to apply.`,
           "Restart Now"
-        ).then(async (choice) => {
-          if (choice === "Restart Now") {
-            stopMcpServer();
-            await startMcpServer(context);
-          }
-        });
+        );
+        
+        if (choice === "Restart Now") {
+          stopMcpServer();
+          await startMcpServer(context);
+        }
       }
 
       updateStatusBar(!!mcpProcess);
     }),
 
-    vscode.commands.registerCommand("nurones.mcp.showStatus", async () => {
+    qoder.commands.registerCommand("nurones.mcp.showStatus", async () => {
       const running = !!mcpProcess;
       const status = [
         `**Nurones MCP Server Status**`,
@@ -379,7 +436,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         `- Toggle Context Engine`,
       ].join("\n");
 
-      const action = await vscode.window.showInformationMessage(
+      const action = await qoder.window.showInformationMessage(
         status,
         running ? "Stop Server" : "Start Server",
         "Open Dashboard",
@@ -391,7 +448,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       } else if (action === "Stop Server" && running) {
         stopMcpServer();
       } else if (action === "Open Dashboard") {
-        vscode.commands.executeCommand("nurones.mcp.openDashboard");
+        qoder.commands.executeCommand("nurones.mcp.openDashboard");
       } else if (action === "View Logs") {
         outputChannel.show();
       }
@@ -399,15 +456,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   );
 
   // Auto-start if configured
-  const cfg = vscode.workspace.getConfiguration("nuronesMcp");
-  if (cfg.get<boolean>("autoStart")) {
+  const cfg = qoder.workspace.getConfiguration("nuronesMcp");
+  if (cfg.get("autoStart")) {
     await startMcpServer(context);
   }
 
   // Register with MCP server
   await registerConnection();
 
-  outputChannel.appendLine("Nurones MCP extension ready");
+  outputChannel.appendLine("Nurones MCP extension ready for Qoder IDE");
 }
 
 /**

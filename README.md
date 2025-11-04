@@ -3,7 +3,7 @@
 </p>
 
 <h3 align="center">🧠 Nurones MCP Server</h3>
-<p align="center">Self-adaptive, context-aware Model Context Protocol (MCP) server — <b>Rust core</b> · <b>TypeScript SDK</b> · <b>VS Code extension</b>.</p>
+<p align="center">Self-adaptive, context-aware Model Context Protocol (MCP) server — <b>Rust core</b> · <b>TypeScript SDK</b> · <b>VS Code & Qoder extensions</b>.</p>
 
 <p align="center">
   <a href="https://github.com/nurones/nurones-mcp/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/nurones/nurones-mcp/actions/workflows/ci.yml/badge.svg"></a>
@@ -21,7 +21,9 @@ cd nurones-mcp
 ./quickstart.sh
 ```
 
-VS Code: open `/extensions/vscode`, `npm i && npm run build`, then press <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> → "Nurones MCP".
+**VS Code**: open `/extensions/vscode`, `npm i && npm run build`, then press <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> → "Nurones MCP".
+
+**Qoder**: open `/extensions/qoder`, `npm i && npm run build`, then access via Qoder Command Palette → "Nurones MCP".
 
 ## 🧩 Architecture
 
@@ -29,7 +31,8 @@ VS Code: open `/extensions/vscode`, `npm i && npm run build`, then press <kbd>Ct
 | ---------------------- | ------------ | --------------------------------------- |
 | **mcp-core/**          | Rust (Tokio) | Event bus, ContextFrame, WASI tools     |
 | **sdk-node/**          | TypeScript   | Contracts, schemas, integration helpers |
-| **extensions/vscode/**  | TypeScript   | Primary host (developer UX)             |
+| **extensions/vscode/** | TypeScript   | VS Code integration (developer UX)      |
+| **extensions/qoder/**  | TypeScript   | Qoder IDE integration (AI-native UX)    |
 | **admin-web/**         | React/Next   | Telemetry + governance                  |
 | **.mcp/**              | JSON         | Config + tool manifests                 |
 

@@ -1,41 +1,30 @@
 # Makefile for Nurones MCP Spiral-1
 
-.PHONY: all build build-core build-wasi build-sdk build-web test bench clean help
+.PHONY: wasm-fs-read build-core build-all clean
 
-# Default target
-all: build
+# Build WASI fs_read tool
+wasm-fs-read:
+	@echo "Building WASI fs_read tool..."
+	cd .mcp/wasm/fs-read && cargo build --release --target wasm32-wasip1
+	@mkdir -p .mcp/wasm
+	cp .mcp/wasm/fs-read/target/wasm32-wasip1/release/fs_read.wasm .mcp/wasm/fs_read.wasm
+	@echo "✓ fs_read.wasm ready at .mcp/wasm/fs_read.wasm"
+
+# Build MCP core server
+build-core:
+	@echo "Building MCP core server..."
+	cd mcp-core && cargo build --release
+	@echo "✓ MCP server ready"
 
 # Build everything
-build: build-core build-wasi build-sdk build-web
+build-all: wasm-fs-read build-core
+	@echo "✓ All builds complete"
 
-# Build Rust core
-build-core:
-	@echo "Building MCP core..."
-	cd mcp-core && cargo build --release
-
-# Build WASI tools
-build-wasi:
-	@echo "Building WASI tools..."
-	@echo "Checking for wasm32-wasi target..."
-	@rustup target add wasm32-wasi 2>/dev/null || true
-	cd examples/fs-read && cargo build --release --target wasm32-wasi
-	cd examples/fs-write && cargo build --release --target wasm32-wasi
-	@echo "WASI tools built successfully"
-
-# Build Node SDK
-build-sdk:
-	@echo "Building Node SDK..."
-	cd sdk-node && pnpm install && pnpm build
-
-# Build Admin Web
-build-web:
-	@echo "Building Admin Web..."
-	cd admin-web && pnpm install && pnpm build
-
-# Build VS Code extension
-build-vscode:
-	@echo "Building VS Code extension..."
-	cd extensions/vscode && npm install && npm run build
+# Clean build artifacts
+clean:
+	cd mcp-core && cargo clean
+	cd .mcp/wasm/fs-read && cargo clean
+	rm -f .mcp/wasm/fs_read.wasm
 
 # Run tests
 test:

@@ -1,0 +1,26 @@
+{
+  "name": "@nurones/mcp-ext-session-compression",
+  "version": "0.1.0",
+  "description": "Session digest compression and timeline management",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "test": "jest"
+  },
+  "keywords": ["mcp", "session", "compression", "timeline"],
+  "author": "Nurones",
+  "license": "MIT",
+  "dependencies": {
+    "date-fns": "^2.30.0",
+    "date-fns-tz": "^2.0.0",
+    "js-yaml": "^4.1.0",
+    "glob": "^10.3.10"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/js-yaml": "^4.0.9",
+    "typescript": "^5.3.0"
+  }
+}

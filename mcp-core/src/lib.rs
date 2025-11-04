@@ -8,6 +8,11 @@ pub mod tool_executor;
 pub mod tool_wasi;
 pub mod observability;
 pub mod contracts;
+pub mod server_state;
+pub mod security;
+pub mod policies;
+pub mod connector_virtual;
+pub mod settings;
 
 pub use types::*;
 pub use config::*;

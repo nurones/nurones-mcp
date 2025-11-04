@@ -1,0 +1,56 @@
+{
+  "name": "session.compress",
+  "version": "0.1.0",
+  "entry": "native://extensions/session-compression",
+  "permissions": ["read", "write"],
+  "description": "Compress session transcripts into digestible summaries with timeline management",
+  "schema": {
+    "input": {
+      "type": "object",
+      "required": ["sources", "char_limit", "context_frame", "reason_trace_id", "tenant_id"],
+      "properties": {
+        "sources": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "type": "object",
+                "required": ["kind", "content"],
+                "properties": {
+                  "kind": { "const": "paste" },
+                  "content": { "type": "string" }
+                }
+              },
+              {
+                "type": "object",
+                "required": ["kind", "path"],
+                "properties": {
+                  "kind": { "const": "file" },
+                  "path": { "type": "string" }
+                }
+              }
+            ]
+          }
+        },
+        "char_limit": { "type": "number", "minimum": 100, "maximum": 100000 },
+        "preserve_markup": { "type": "boolean", "default": false },
+        "timezone": { "type": "string", "default": "Australia/Adelaide" },
+        "output_dir": { "type": "string", "default": "/tmp/summaries" },
+        "filename_scheme": { "enum": ["date_session_len", "source_len"], "default": "date_session_len" },
+        "dry_run": { "type": "boolean", "default": false },
+        "context_frame": { "type": "object" },
+        "reason_trace_id": { "type": "string" },
+        "tenant_id": { "type": "string" }
+      }
+    },
+    "output": {
+      "type": "object",
+      "properties": {
+        "report": { "type": "object" },
+        "summaries": { "type": "array" },
+        "index_path": { "type": "string" },
+        "timeline_path": { "type": "string" }
+      }
+    }
+  }
+}

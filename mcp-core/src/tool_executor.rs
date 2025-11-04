@@ -1,5 +1,6 @@
 use crate::types::{ContextFrame, ToolResult};
 use crate::tool_wasi::WasiRunner;
+use crate::security::is_allowed;
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -27,17 +28,107 @@ pub struct ToolManifest {
     pub description: String,
 }
 
-/// In-memory tool executor (production would support WASI runtime)
+/// In-memory tool executor with security enforcement
 pub struct InMemoryToolExecutor {
     tools: Arc<tokio::sync::RwLock<HashMap<String, ToolManifest>>>,
     wasi_runner: WasiRunner,
+    fs_allowlist: Vec<String>,
 }
 
 impl InMemoryToolExecutor {
     pub fn new() -> Self {
         Self {
             tools: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
-            wasi_runner: WasiRunner::new().expect("Failed to create WASI runner"),
+            wasi_runner: WasiRunner::new().unwrap_or_else(|_| {
+                tracing::warn!("WASI runner initialization failed, using native fallbacks");
+                WasiRunner::disabled()
+            }),
+            fs_allowlist: vec!["/workspace".to_string(), "/tmp".to_string()],
+        }
+    }
+
+    pub fn with_allowlist(fs_allowlist: Vec<String>) -> Self {
+        Self {
+            tools: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
+            wasi_runner: WasiRunner::new().unwrap_or_else(|_| {
+                tracing::warn!("WASI runner initialization failed, using native fallbacks");
+                WasiRunner::disabled()
+            }),
+            fs_allowlist,
+        }
+    }
+
+    /// Execute session compression tool (native Node.js)
+    async fn execute_session_compression(
+        &self,
+        input: serde_json::Value,
+        context: ContextFrame,
+        start: std::time::Instant,
+    ) -> anyhow::Result<ToolResult> {
+        use std::process::{Command, Stdio};
+        use std::io::Write;
+        
+        // Path to the CLI wrapper
+        let cli_path = "extensions/session-compression/cli.js";
+        
+        // Prepare input with context
+        let full_input = serde_json::json!({
+            "sources": input.get("sources").unwrap_or(&serde_json::json!([])),
+            "char_limit": input.get("char_limit").unwrap_or(&serde_json::json!(1000)),
+            "preserve_markup": input.get("preserve_markup").unwrap_or(&serde_json::json!(false)),
+            "timezone": input.get("timezone").unwrap_or(&serde_json::json!("Australia/Adelaide")),
+            "output_dir": input.get("output_dir").unwrap_or(&serde_json::json!("/tmp/summaries")),
+            "filename_scheme": input.get("filename_scheme").unwrap_or(&serde_json::json!("date_session_len")),
+            "dry_run": input.get("dry_run").unwrap_or(&serde_json::json!(false)),
+            "context_frame": context,
+            "reason_trace_id": context.reason_trace_id.clone(),
+            "tenant_id": context.tenant_id.clone(),
+        });
+        
+        let input_json = serde_json::to_string(&full_input)?;
+        
+        // Execute via Node.js CLI
+        let mut child = Command::new("node")
+            .arg(cli_path)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()?;
+        
+        // Write input to stdin
+        if let Some(mut stdin) = child.stdin.take() {
+            stdin.write_all(input_json.as_bytes())?;
+        }
+        
+        // Wait and capture output
+        let output = child.wait_with_output()?;
+        
+        if output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let result: serde_json::Value = serde_json::from_str(&stdout)
+                .unwrap_or_else(|e| {
+                    tracing::error!("Failed to parse output: {}", e);
+                    serde_json::json!({ "raw_output": stdout.to_string() })
+                });
+            
+            Ok(ToolResult {
+                success: true,
+                output: Some(result),
+                error: None,
+                execution_time: start.elapsed().as_millis() as u64,
+                context_used: context,
+            })
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            tracing::error!("Session compression failed. stderr: {}, stdout: {}", stderr, stdout);
+            Ok(ToolResult {
+                success: false,
+                output: None,
+                error: Some(format!("Execution failed: {}", stderr)),
+                execution_time: start.elapsed().as_millis() as u64,
+                context_used: context,
+            })
         }
     }
 
@@ -102,8 +193,20 @@ impl ToolExecutor for InMemoryToolExecutor {
             
             tracing::info!("Executing WASI tool: {} from {}", tool_id, wasm_path);
             
+            // For fs tools, validate path is in allowlist
+            if tool_id.starts_with("fs.") {
+                if let Some(path) = input.get("path").and_then(|v| v.as_str()) {
+                    tracing::debug!("Checking path '{}' against allowlist: {:?}", path, self.fs_allowlist);
+                    is_allowed(path, &self.fs_allowlist)
+                        .map_err(|e| anyhow::anyhow!("Security error: {}", e))?;
+                }
+            }
+            
+            // Convert allowlist to preopen dirs
+            let preopen_dirs: Vec<&str> = self.fs_allowlist.iter().map(|s| s.as_str()).collect();
+            
             // Execute WASI module
-            match self.wasi_runner.exec(wasm_path, &input) {
+            match self.wasi_runner.exec(wasm_path, &input, &preopen_dirs) {
                 Ok(output_str) => {
                     let output: serde_json::Value = serde_json::from_str(&output_str)
                         .unwrap_or_else(|_| serde_json::json!({ "result": output_str }));
@@ -129,6 +232,27 @@ impl ToolExecutor for InMemoryToolExecutor {
             }
         }
 
+        // Check if this is a native Node.js tool
+        if tool.entry.starts_with("native://") {
+            let tool_path = tool.entry.trim_start_matches("native://");
+            
+            tracing::info!("Executing native tool: {} from {}", tool_id, tool_path);
+            
+            // For session.compress, call the TypeScript implementation
+            if tool_id == "session.compress" {
+                return self.execute_session_compression(input, context, start).await;
+            }
+            
+            // Other native tools would be added here
+            return Ok(ToolResult {
+                success: false,
+                output: None,
+                error: Some(format!("Native tool not implemented: {}", tool_id)),
+                execution_time: start.elapsed().as_millis() as u64,
+                context_used: context,
+            });
+        }
+
         // For filesystem tools, check context-governed permissions
         if tool_id.starts_with("fs.") && context.flags.as_ref().map_or(false, |f| f.read_only) {
             if tool_id == "fs.write" {
@@ -140,6 +264,89 @@ impl ToolExecutor for InMemoryToolExecutor {
                     context_used: context,
                 });
             }
+        }
+
+        // Native implementations for common tools (fallback when WASI not available)
+        match tool_id {
+            "fs.read" => {
+                // Extract path from input
+                let path = input.get("path")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow::anyhow!("fs.read requires 'path' parameter"))?;
+                
+                // Enforce allowlist
+                is_allowed(path, &self.fs_allowlist)
+                    .map_err(|e| anyhow::anyhow!("Security error: {}", e))?;
+                
+                // Read file
+                match tokio::fs::read_to_string(path).await {
+                    Ok(content) => {
+                        return Ok(ToolResult {
+                            success: true,
+                            output: Some(serde_json::json!({
+                                "content": content,
+                                "path": path,
+                                "size": content.len()
+                            })),
+                            error: None,
+                            execution_time: start.elapsed().as_millis() as u64,
+                            context_used: context,
+                        });
+                    }
+                    Err(e) => {
+                        return Ok(ToolResult {
+                            success: false,
+                            output: None,
+                            error: Some(format!("Failed to read file: {}", e)),
+                            execution_time: start.elapsed().as_millis() as u64,
+                            context_used: context,
+                        });
+                    }
+                }
+            }
+            "fs.list" => {
+                let path = input.get("path")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or(".");
+                
+                is_allowed(path, &self.fs_allowlist)
+                    .map_err(|e| anyhow::anyhow!("Security error: {}", e))?;
+                
+                match tokio::fs::read_dir(path).await {
+                    Ok(mut entries) => {
+                        let mut files = Vec::new();
+                        while let Ok(Some(entry)) = entries.next_entry().await {
+                            if let Ok(metadata) = entry.metadata().await {
+                                files.push(serde_json::json!({
+                                    "name": entry.file_name().to_string_lossy().to_string(),
+                                    "is_dir": metadata.is_dir(),
+                                    "size": metadata.len()
+                                }));
+                            }
+                        }
+                        return Ok(ToolResult {
+                            success: true,
+                            output: Some(serde_json::json!({
+                                "path": path,
+                                "entries": files
+                            })),
+                            error: None,
+                            execution_time: start.elapsed().as_millis() as u64,
+                            context_used: context,
+                        });
+                    }
+                    Err(e) => {
+                        return Ok(ToolResult {
+                            success: false,
+                            output: None,
+                            error: Some(format!("Failed to list directory: {}", e)),
+                            execution_time: start.elapsed().as_millis() as u64,
+                            context_used: context,
+                        });
+                    }
+                }
+            }
+            _ => {}
         }
 
         // Simulate successful execution

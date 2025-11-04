@@ -1,7 +1,7 @@
 {
   "name": "fs.read",
   "version": "1.1.0",
-  "entry": "wasm://examples/fs-read/target/wasm32-wasip1/release/fs_read.wasm",
+  "entry": "wasm://.mcp/wasm/fs_read.wasm",
   "permissions": ["read"],
   "description": "Read file content with context-aware throttling (WASI)"
 }

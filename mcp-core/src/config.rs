@@ -1,9 +1,26 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+/// Server network configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServerNetConfig {
+    #[serde(default = "default_port")]
+    pub port: u16,
+}
+
+fn default_port() -> u16 { 4050 }
+
+impl Default for ServerNetConfig {
+    fn default() -> Self {
+        Self { port: 4050 }
+    }
+}
+
 /// Server configuration (loaded from .mcp/config.json)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfig {
+    #[serde(default)]
+    pub server: ServerNetConfig,
     pub profile: String,
     pub transports: Vec<Transport>,
     pub rbac: RbacConfig,
@@ -33,8 +50,6 @@ pub struct RbacConfig {
 pub struct ObservabilityConfig {
     #[serde(rename = "otelExporter")]
     pub otel_exporter: String,
-    #[serde(rename = "prometheusPort")]
-    pub prometheus_port: u16,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -100,6 +115,7 @@ mod tests {
     #[test]
     fn test_config_validation() {
         let config = ServerConfig {
+            server: ServerNetConfig { port: 4050 },
             profile: "test".to_string(),
             transports: vec![Transport::Stdio],
             rbac: RbacConfig {
@@ -108,7 +124,6 @@ mod tests {
             },
             observability: ObservabilityConfig {
                 otel_exporter: "http://localhost:4318".to_string(),
-                prometheus_port: 9464,
             },
             context_engine: ContextEngineConfig {
                 enabled: true,

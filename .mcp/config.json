@@ -1,21 +1,54 @@
 {
+  "context_engine": {
+    "changeCapPctPerDay": 10,
+    "enabled": true,
+    "minConfidence": 0.6
+  },
+  "filesystem": {
+    "baseDir": "/home/goldiuns/projects/nurones-au/nurones-cide"
+  },
+  "observability": {
+    "otelExporter": "http://localhost:4318"
+  },
+  "performance": {
+    "batchSize": 64,
+    "maxInflight": 2048,
+    "queueWatermark": 0.75
+  },
+  "policies": {
+    "fs_allowlist": [
+      "/workspace",
+      "/tmp",
+      "/tmp/summaries"
+    ],
+    "roles": {
+      "admin": [
+        "*"
+      ],
+      "operator": [
+        "fs.read",
+        "fs.list",
+        "telemetry.push",
+        "session.compress"
+      ],
+      "reader": [
+        "fs.read"
+      ]
+    },
+    "users": {
+      "guest": "reader",
+      "local:dev": "admin"
+    }
+  },
   "profile": "dev",
-  "transports": ["stdio", "ws"],
   "rbac": {
     "defaultRole": "operator"
   },
-  "observability": {
-    "otelExporter": "http://localhost:4318",
-    "prometheusPort": 9464
+  "server": {
+    "port": 4050
   },
-  "contextEngine": {
-    "enabled": true,
-    "changeCapPctPerDay": 10,
-    "minConfidence": 0.6
-  },
-  "performance": {
-    "maxInflight": 2048,
-    "batchSize": 64,
-    "queueWatermark": 0.75
-  }
+  "transports": [
+    "stdio",
+    "ws"
+  ]
 }

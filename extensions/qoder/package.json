@@ -1,0 +1,95 @@
+{
+  "name": "nurones-mcp-qoder",
+  "displayName": "Nurones MCP for Qoder",
+  "description": "Self-adaptive Model Context Protocol runtime with context engineering for Qoder IDE",
+  "version": "0.5.0",
+  "publisher": "nurones",
+  "engines": {
+    "qoder": "^0.2.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:nurones.mcp.openDashboard",
+    "onCommand:nurones.mcp.execTool",
+    "onCommand:nurones.mcp.viewTrace",
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "nurones.mcp.openDashboard",
+        "title": "Nurones MCP: Open Dashboard",
+        "category": "Nurones"
+      },
+      {
+        "command": "nurones.mcp.execTool",
+        "title": "Nurones MCP: Execute Tool",
+        "category": "Nurones"
+      },
+      {
+        "command": "nurones.mcp.viewTrace",
+        "title": "Nurones MCP: View Context Trace",
+        "category": "Nurones"
+      },
+      {
+        "command": "nurones.mcp.toggleContextEngine",
+        "title": "Nurones MCP: Toggle Context Engine",
+        "category": "Nurones"
+      },
+      {
+        "command": "nurones.mcp.showStatus",
+        "title": "Nurones MCP: Show Status",
+        "category": "Nurones"
+      }
+    ],
+    "configuration": {
+      "title": "Nurones MCP",
+      "properties": {
+        "nuronesMcp.serverBinary": {
+          "type": "string",
+          "default": "${workspaceFolder}/mcp-core/target/release/nurones-mcp",
+          "description": "Path to nurones-mcp server binary"
+        },
+        "nuronesMcp.serverConfig": {
+          "type": "string",
+          "default": "${workspaceFolder}/.mcp/config.json",
+          "description": "Path to MCP server configuration file"
+        },
+        "nuronesMcp.adminWebUrl": {
+          "type": "string",
+          "default": "http://localhost:3001",
+          "description": "Admin web UI URL"
+        },
+        "nuronesMcp.autoStart": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically start MCP server on activation"
+        },
+        "nuronesMcp.contextEngine": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable Context Engine (adaptive tuning)"
+        },
+        "nuronesMcp.fsAllowlist": {
+          "type": "string",
+          "default": "${workspaceFolder},/tmp",
+          "description": "Filesystem allowlist (comma-separated paths)"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsc -p .",
+    "watch": "tsc -w -p .",
+    "pack": "qoder-pack",
+    "prepublish": "npm run build"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "@types/node": "^20.10.0"
+  }
+}

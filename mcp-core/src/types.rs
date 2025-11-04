@@ -36,11 +36,38 @@ pub enum Stage {
     Prod,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RiskLevel {
     Safe = 0,
     Caution = 1,
     Block = 2,
+}
+
+impl Serialize for RiskLevel {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_u8(*self as u8)
+    }
+}
+
+impl<'de> Deserialize<'de> for RiskLevel {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value = u8::deserialize(deserializer)?;
+        match value {
+            0 => Ok(RiskLevel::Safe),
+            1 => Ok(RiskLevel::Caution),
+            2 => Ok(RiskLevel::Block),
+            _ => Err(serde::de::Error::custom(format!(
+                "invalid risk_level: {}, expected 0, 1, or 2",
+                value
+            ))),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
