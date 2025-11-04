@@ -62,18 +62,19 @@ dev-start: build
 quick: build-core build-wasi
 	@echo "Quick build complete (core + WASI tools)"
 
-# Help target
-help:
-	@echo "Nurones MCP Build Targets:"
-	@echo "  make all         - Build everything (default)"
-	@echo "  make build       - Build all components"
-	@echo "  make build-core  - Build Rust MCP core"
-	@echo "  make build-wasi  - Build WASI tools"
-	@echo "  make build-sdk   - Build Node SDK"
-	@echo "  make build-web   - Build Admin Web"
-	@echo "  make test        - Run tests"
-	@echo "  make bench       - Run benchmarks"
-	@echo "  make clean       - Clean all build artifacts"
-	@echo "  make dev-start   - Start development environment"
-	@echo "  make quick       - Quick build (core + WASI)"
-	@echo "  make help        - Show this help"
+.PHONY: docker-core docker-admin docker-up docker-down docker-logs
+
+docker-core:
+	docker build -t ghcr.io/nurones/mcp-core:local -f Dockerfile .
+
+docker-admin:
+	docker build -t ghcr.io/nurones/mcp-admin:local -f admin-web/Dockerfile .
+
+docker-up:
+	docker compose up -d --build
+
+docker-down:
+	docker compose down
+
+docker-logs:
+	docker compose logs -f --tail=200

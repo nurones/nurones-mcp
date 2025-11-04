@@ -1,0 +1,13 @@
+target
+**/target
+node_modules
+**/.next
+dist
+.git
+.gitignore
+**/*.log
+**/.DS_Store
+**/coverage
+**/.vscode
+out
+admin-web/out

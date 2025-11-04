@@ -1,28 +1,57 @@
-version: '3.8'
-
+version: "3.9"
 services:
-  otel-collector:
-    image: otel/opentelemetry-collector:latest
-    container_name: nurones-otel
-    command: ["--config=/etc/otel-collector-config.yaml"]
+  core:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ghcr.io/nurones/mcp-core:local
+    container_name: nurones-mcp-core
+    environment:
+      RUST_LOG: info
+      FS_ALLOWLIST: "/workspace,/tmp"
     volumes:
-      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
+      - ./.mcp:/app/.mcp:rw
+      - ./workspace:/workspace:rw
     ports:
-      - "4318:4318"  # OTLP HTTP
-      - "4317:4317"  # OTLP gRPC
-    networks:
-      - nurones-net
+      - "50550:50550"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:50550/api/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /run
+    restart: unless-stopped
+
+  admin:
+    build:
+      context: .
+      dockerfile: admin-web/Dockerfile
+    image: ghcr.io/nurones/mcp-admin:local
+    container_name: nurones-mcp-admin
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: http://core:50550
+    depends_on:
+      core:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
 
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v2.55.0
     container_name: nurones-prometheus
     volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      core:
+        condition: service_healthy
     ports:
       - "9090:9090"
-    networks:
-      - nurones-net
-
-networks:
-  nurones-net:
-    driver: bridge
+    restart: unless-stopped
