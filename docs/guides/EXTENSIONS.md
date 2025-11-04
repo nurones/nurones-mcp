@@ -24,7 +24,7 @@ Nurones MCP provides native extensions for both **VS Code** and **Qoder IDE**, e
 ### VS Code Extension
 
 ```bash
-cd extensions/vscode
+cd plugins/vscode
 npm install
 npm run build
 
@@ -33,13 +33,13 @@ code --extensionDevelopmentPath=$(pwd)
 
 # Option 2: Package and install
 npm run pack
-code --install-extension nurones-mcp-0.5.0.vsix
+code --install-extension nurones-mcp-0.5.4.vsix
 ```
 
 ### Qoder Extension
 
 ```bash
-cd extensions/qoder
+cd plugins/qoder
 npm install
 npm run build
 
@@ -47,7 +47,7 @@ npm run build
 npm run pack
 
 # Install via Qoder Extension Manager
-# Extensions > Install from VSIX > Select nurones-mcp-qoder-0.5.0.vsix
+# Extensions > Install from VSIX > Select nurones-mcp-qoder-0.5.4.vsix
 ```
 
 ## Configuration
@@ -58,7 +58,7 @@ Both extensions use the same configuration schema:
 {
   "nuronesMcp.serverBinary": "${workspaceFolder}/mcp-core/target/release/nurones-mcp",
   "nuronesMcp.serverConfig": "${workspaceFolder}/.mcp/config.json",
-  "nuronesMcp.adminWebUrl": "http://localhost:PORT",
+  "nuronesMcp.adminWebUrl": "http://localhost:50550",
   "nuronesMcp.autoStart": true,
   "nuronesMcp.contextEngine": true,
   "nuronesMcp.fsAllowlist": "${workspaceFolder},/tmp"
@@ -66,8 +66,8 @@ Both extensions use the same configuration schema:
 ```
 
 **Default Differences:**
-- VS Code: `adminWebUrl` defaults to `http://localhost:3000`
-- Qoder: `adminWebUrl` defaults to `http://localhost:3001`
+- VS Code: `adminWebUrl` defaults to `http://localhost:50550`
+- Qoder: `adminWebUrl` defaults to `http://localhost:50550`
 
 ## Commands
 
@@ -152,19 +152,19 @@ Both extensions expose identical commands:
 
 ## Running Both Simultaneously
 
-**Possible:** Yes, but use different admin web ports to avoid conflicts.
+**Possible:** Yes. Use the unified Admin Web UI at `http://localhost:50550` in both IDEs.
 
 **.vscode/settings.json** (VS Code):
 ```json
 {
-  "nuronesMcp.adminWebUrl": "http://localhost:3000"
+  "nuronesMcp.adminWebUrl": "http://localhost:50550"
 }
 ```
 
 **.qoder/settings.json** (Qoder):
 ```json
 {
-  "nuronesMcp.adminWebUrl": "http://localhost:3001"
+  "nuronesMcp.adminWebUrl": "http://localhost:50550"
 }
 ```
 
@@ -172,14 +172,14 @@ Both extensions expose identical commands:
 
 ### VS Code Extension Development
 ```bash
-cd extensions/vscode
+cd plugins/vscode
 npm run watch  # Watch mode
 code --extensionDevelopmentPath=$(pwd)  # Test
 ```
 
 ### Qoder Extension Development
 ```bash
-cd extensions/qoder
+cd plugins/qoder
 npm run watch  # Watch mode
 # Use Qoder's extension development host
 ```

@@ -70,19 +70,19 @@ ls -lh admin-web/.next
 ```
 
 **What this does:**
-- Kills any existing services on ports 4050 and 4055
-- Starts MCP Server on port **4055**
-- Starts Admin Web on port **4050**
-- Verifies both services are healthy
+- Kills any existing services on port **50550**
+- Starts unified MCP Server on port **50550**
+- Serves Admin Web UI statically from the same port
+- Verifies service health
 
 **Expected output:**
 ```
 === Services Started Successfully ===
-MCP Server API:  http://localhost:4055
-Admin Web UI:    http://localhost:4050
+Unified Server:  http://localhost:50550
+API Endpoints:   http://localhost:50550/api/*
+Metrics:         http://localhost:50550/metrics
 Logs:
   MCP Server:    tail -f /tmp/mcp-server.log
-  Admin Web:     tail -f /tmp/admin-web.log
 ```
 
 ### Manual Startup (Alternative)
@@ -96,15 +96,14 @@ export FS_ALLOWLIST=/workspace,/tmp
 ./target/release/nurones-mcp --config ../.mcp/config.json
 
 # Terminal 2: Admin Web UI
-cd admin-web
-PORT=4050 npm run dev
+# Admin UI is served by the unified MCP server at http://localhost:50550
 ```
 
 ---
 
 ## Accessing Admin Web UI
 
-Open your browser: **http://localhost:4050**
+Open your browser: **http://localhost:50550**
 
 ### Available Tabs
 
@@ -132,7 +131,7 @@ Open your browser: **http://localhost:4050**
 ### VS Code Extension
 
 ```bash
-cd extensions/vscode
+cd plugins/vscode
 npm install
 npm run build
 
@@ -141,7 +140,7 @@ code --extensionDevelopmentPath=$(pwd)
 
 # Option 2: Package and install
 npm run pack
-code --install-extension nurones-mcp-0.5.0.vsix
+code --install-extension nurones-mcp-0.5.4.vsix
 ```
 
 **Configure VS Code:**
@@ -167,13 +166,13 @@ Add to `.vscode/settings.json`:
 ### Qoder Extension
 
 ```bash
-cd extensions/qoder
+cd plugins/qoder
 npm install
 npm run build
 npm run pack
 
 # Install via Qoder Extension Manager
-# Extensions > Install from VSIX > Select nurones-mcp-qoder-0.5.0.vsix
+# Extensions > Install from VSIX > Select nurones-mcp-qoder-0.5.4.vsix
 ```
 
 **Configure Qoder:**

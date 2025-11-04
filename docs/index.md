@@ -1,4 +1,4 @@
-# Nurones MCP Documentation
+# Nurones MCP Documentation (v0.5.4)
 
 Welcome to the official documentation.
 
