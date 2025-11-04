@@ -8,11 +8,11 @@ pub struct ServerNetConfig {
     pub port: u16,
 }
 
-fn default_port() -> u16 { 4050 }
+fn default_port() -> u16 { 50550 }
 
 impl Default for ServerNetConfig {
     fn default() -> Self {
-        Self { port: 4050 }
+        Self { port: 50550 }
     }
 }
 
@@ -115,7 +115,7 @@ mod tests {
     #[test]
     fn test_config_validation() {
         let config = ServerConfig {
-            server: ServerNetConfig { port: 4050 },
+            server: ServerNetConfig { port: 50550 },
             profile: "test".to_string(),
             transports: vec![Transport::Stdio],
             rbac: RbacConfig {

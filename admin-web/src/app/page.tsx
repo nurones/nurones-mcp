@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { fetchServerStatus, toggleContextEngine, fetchTools, toggleTool, type ServerStatus, type Connection, type Tool } from './api'
+import { fetchServerStatus, toggleContextEngine, fetchTools, toggleTool, virtualConnectorHealth, virtualConnect, virtualDisconnect, type ServerStatus, type Connection, type Tool } from './api'
 import dynamic from 'next/dynamic'
 
 const PoliciesPage = dynamic(() => import('./policies/page'), { ssr: false })
@@ -82,7 +82,7 @@ export default function Home() {
       <div className="border-b border-gray-800 bg-gray-950">
         <div className="container mx-auto px-6">
           <nav className="flex gap-8">
-            {['Dashboard', 'Tools', 'Test Tools', 'Policies', 'Telemetry', 'Context Monitor'].map((tab) => (
+            {['Dashboard', 'Extensions', 'Tools', 'Connectors', 'Test Tools', 'Policies', 'Telemetry', 'Context Monitor'].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab.toLowerCase().replace(' ', '-'))}
@@ -102,7 +102,9 @@ export default function Home() {
       {/* Content Area */}
       <main className="container mx-auto px-6 py-8">
         {activeTab === 'dashboard' && <DashboardTab serverStatus={serverStatus} onToggleContextEngine={handleToggleContextEngine} />}
+        {activeTab === 'extensions' && <ExtensionsTab />}
         {activeTab === 'tools' && <ToolsTab />}
+        {activeTab === 'connectors' && <ConnectorsTab />}
         {activeTab === 'test-tools' && <TestToolsPage />}
         {activeTab === 'policies' && <PoliciesPage />}
         {activeTab === 'telemetry' && <TelemetryTab />}
@@ -199,7 +201,7 @@ function DashboardTab({ serverStatus, onToggleContextEngine }: {
           </div>
           <div>
             <span className="text-gray-400">Transports:</span>
-            <span className="ml-2 text-white">stdio, ws</span>
+            <span className="ml-2 text-white">{serverStatus?.transports?.join(', ') || 'n/a'}</span>
           </div>
           <div>
             <span className="text-gray-400">Default Role:</span>
@@ -316,6 +318,120 @@ function ToolsTab() {
             ))}
           </tbody>
         </table>
+      </div>
+    </div>
+  )
+}
+
+function ExtensionsTab() {
+  const [tools, setTools] = useState<Tool[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const loadExtensions = async () => {
+      try {
+        const data = await fetchTools()
+        setTools(data)
+      } catch (err) {
+        console.error('Failed to fetch extensions:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadExtensions()
+  }, [])
+
+  if (loading) return <div className="text-center py-8">Loading extensions...</div>
+
+  return (
+    <div className="space-y-6">
+      <h2 className="text-xl font-semibold">MCP Extensions</h2>
+      <p className="text-sm text-gray-400">Registered tool manifests discovered under <code className="text-cyan-400">.mcp/tools</code>.</p>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {tools.map((tool) => (
+          <div key={tool.name} className="bg-gray-800 rounded-lg p-6">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-cyan-400">{tool.name}</h3>
+              <span className="px-2 py-1 text-xs bg-gray-700 rounded">{tool.version}</span>
+            </div>
+            <div className="mt-3 text-sm text-gray-300">
+              <div>Type: <span className="px-2 py-1 text-xs bg-gray-700 rounded">{tool.tool_type}</span></div>
+              <div className="mt-1">Permissions: {tool.permissions.join(', ')}</div>
+              <div className="mt-1">Status: <span className={`px-2 py-1 text-xs font-medium rounded ${tool.enabled ? 'bg-green-900 text-green-300' : 'bg-gray-700 text-gray-400'}`}>{tool.enabled ? 'enabled' : 'disabled'}</span></div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function ConnectorsTab() {
+  const [active, setActive] = useState<number>(0)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [status, setStatus] = useState<ServerStatus | null>(null)
+
+  const refresh = async () => {
+    try {
+      const health = await virtualConnectorHealth()
+      setActive(health.active_connections)
+      const s = await fetchServerStatus()
+      setStatus(s)
+      setError(null)
+    } catch (err) {
+      console.error('Failed to fetch connector health:', err)
+      setError('Failed to fetch connector health')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    refresh()
+    const interval = setInterval(refresh, 5000)
+    return () => clearInterval(interval)
+  }, [])
+
+  const handleConnect = async () => {
+    try { await virtualConnect(); await refresh() } catch {}
+  }
+  const handleDisconnect = async () => {
+    try { await virtualDisconnect(); await refresh() } catch {}
+  }
+
+  return (
+    <div className="space-y-6">
+      <h2 className="text-xl font-semibold">MCP Connectors</h2>
+      <div className="bg-gray-800 rounded-lg p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold">Virtual Connector (in-process)</h3>
+            <p className="text-sm text-gray-400">Broker for in-IDE connections via single unified server port.</p>
+          </div>
+          <div className="text-right">
+            <div className="text-3xl font-bold">{active}</div>
+            <div className="text-xs text-gray-400">active connections</div>
+          </div>
+        </div>
+        <div className="mt-4 text-sm text-gray-300">
+          <div>Transports: {status?.transports?.join(', ') || 'n/a'}</div>
+          <div className="mt-1">
+            Runtimes:
+            <span className={`ml-2 px-2 py-1 text-xs rounded ${status?.runtimes?.native_available ? 'bg-green-900 text-green-300' : 'bg-gray-700 text-gray-300'}`}>
+              Native {status?.runtimes?.native_available ? 'available' : 'unavailable'}
+            </span>
+            <span className={`ml-2 px-2 py-1 text-xs rounded ${status?.runtimes?.wasi_available ? 'bg-green-900 text-green-300' : 'bg-gray-700 text-gray-300'}`}>
+              WASI {status?.runtimes?.wasi_available ? 'available' : 'unavailable'}
+            </span>
+          </div>
+        </div>
+        <div className="mt-4 flex gap-3">
+          <button onClick={handleConnect} className="px-4 py-2 bg-cyan-600 hover:bg-cyan-700 rounded transition-colors">Connect</button>
+          <button onClick={handleDisconnect} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded transition-colors">Disconnect</button>
+          {loading && <span className="text-sm text-gray-400">Loading...</span>}
+          {error && <span className="text-sm text-red-400">{error}</span>}
+        </div>
       </div>
     </div>
   )

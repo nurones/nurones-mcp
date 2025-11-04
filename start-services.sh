@@ -2,7 +2,7 @@
 
 # Nurones MCP Services Startup Script
 # This script ensures clean startup by killing existing services on designated ports
-# Port 4050: Unified Server (Admin Web UI + MCP Server API)
+# Port 50550: Unified Server (Admin Web UI + MCP Server API)
 
 set -e
 
@@ -14,11 +14,11 @@ NC='\033[0m' # No Color
 
 echo -e "${GREEN}=== Nurones MCP Services Startup ===${NC}"
 
-# Kill any process using port 4050 (Unified Server)
-echo -e "${YELLOW}Checking port 4050 (Unified Server)...${NC}"
-if lsof -Pi :4050 -sTCP:LISTEN -t >/dev/null 2>&1 ; then
-    echo -e "${RED}Port 4050 is in use, killing existing process...${NC}"
-    kill -9 $(lsof -t -i:4050) 2>/dev/null || true
+# Kill any process using port 50550 (Unified Server)
+echo -e "${YELLOW}Checking port 50550 (Unified Server)...${NC}"
+if lsof -Pi :50550 -sTCP:LISTEN -t >/dev/null 2>&1 ; then
+    echo -e "${RED}Port 50550 is in use, killing existing process...${NC}"
+    kill -9 $(lsof -t -i:50550) 2>/dev/null || true
     sleep 1
 fi
 
@@ -28,15 +28,15 @@ pkill -f "nurones-mcp" 2>/dev/null || true
 sleep 1
 
 # Verify port is free
-if lsof -Pi :4050 -sTCP:LISTEN -t >/dev/null 2>&1 ; then
-    echo -e "${RED}ERROR: Port 4050 still in use after cleanup!${NC}"
+if lsof -Pi :50550 -sTCP:LISTEN -t >/dev/null 2>&1 ; then
+    echo -e "${RED}ERROR: Port 50550 still in use after cleanup!${NC}"
     exit 1
 fi
 
-echo -e "${GREEN}Port 4050 is now free${NC}"
+echo -e "${GREEN}Port 50550 is now free${NC}"
 
-# Start MCP Server on port 4050 (includes Admin Web & API)
-echo -e "${GREEN}Starting MCP Server on port 4050...${NC}"
+# Start MCP Server on port 50550 (includes Admin Web & API)
+echo -e "${GREEN}Starting MCP Server on port 50550...${NC}"
 cd "$(dirname "$0")"
 # Add wasmtime to PATH for WASI tool execution
 export PATH="$HOME/.wasmtime/bin:$PATH"
@@ -47,7 +47,7 @@ echo -e "${GREEN}MCP Server started (PID: $MCP_PID)${NC}"
 # Wait for MCP server to be ready
 echo -e "${YELLOW}Waiting for MCP Server to be ready...${NC}"
 for i in {1..30}; do
-    if curl -s http://localhost:4050/api/health > /dev/null 2>&1; then
+    if curl -s http://localhost:50550/api/health > /dev/null 2>&1; then
         echo -e "${GREEN}MCP Server is ready!${NC}"
         break
     fi
@@ -61,11 +61,11 @@ done
 
 echo -e "${GREEN}"
 echo "=== Services Started Successfully ==="
-echo "Unified Server:  http://localhost:4050"
-echo "API Endpoints:   http://localhost:4050/api/*"
-echo "Metrics:         http://localhost:4050/metrics"
-echo "Settings:        http://localhost:4050/api/settings/server"
-echo "Virtual Conn:    http://localhost:4050/api/connector/virtual/health"
+echo "Unified Server:  http://localhost:50550"
+echo "API Endpoints:   http://localhost:50550/api/*"
+echo "Metrics:         http://localhost:50550/metrics"
+echo "Settings:        http://localhost:50550/api/settings/server"
+echo "Virtual Conn:    http://localhost:50550/api/connector/virtual/health"
 echo "Logs:"
 echo "  MCP Server:    tail -f /tmp/mcp-server.log"
 echo -e "${NC}"

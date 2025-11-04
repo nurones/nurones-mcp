@@ -7,6 +7,11 @@ export interface ServerStatus {
   context_engine_enabled: boolean
   tools_count: number
   connections: Connection[]
+  transports: string[]
+  runtimes: {
+    native_available: boolean
+    wasi_available: boolean
+  }
 }
 
 export interface Connection {
@@ -24,7 +29,7 @@ export interface Tool {
   tool_type: string
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4050'
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || ''
 
 export async function fetchServerStatus(): Promise<ServerStatus> {
   const response = await fetch(`${API_BASE}/api/status`)
@@ -62,4 +67,30 @@ export async function fetchTools(): Promise<Tool[]> {
     throw new Error(`Failed to fetch tools: ${response.statusText}`)
   }
   return response.json()
+}
+
+// Virtual connector API
+export async function virtualConnectorHealth(): Promise<{ active_connections: number }> {
+  const response = await fetch(`${API_BASE}/api/connector/virtual/health`)
+  if (!response.ok) {
+    throw new Error(`Failed to fetch virtual connector health: ${response.statusText}`)
+  }
+  const text = await response.text()
+  const match = text.match(/active_connections=(\d+)/)
+  const active = match ? parseInt(match[1], 10) : 0
+  return { active_connections: active }
+}
+
+export async function virtualConnect(): Promise<void> {
+  const response = await fetch(`${API_BASE}/api/connector/virtual/connect`, { method: 'POST' })
+  if (!response.ok) {
+    throw new Error(`Failed to connect virtual connector: ${response.statusText}`)
+  }
+}
+
+export async function virtualDisconnect(): Promise<void> {
+  const response = await fetch(`${API_BASE}/api/connector/virtual/disconnect`, { method: 'POST' })
+  if (!response.ok) {
+    throw new Error(`Failed to disconnect virtual connector: ${response.statusText}`)
+  }
 }

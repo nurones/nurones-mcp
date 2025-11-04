@@ -158,6 +158,9 @@ async fn main() -> anyhow::Result<()> {
     let executor_for_server = tool_executor_for_api.clone();
     let policies_for_server = policies.clone();
     let vc_for_server = virtual_connector.clone();
+    let transports_for_server: Vec<String> = config.transports.iter()
+        .map(|t| format!("{:?}", t).to_lowercase())
+        .collect();
     tokio::spawn(async move {
         if let Err(e) = start_api_server(
             port,
@@ -166,6 +169,7 @@ async fn main() -> anyhow::Result<()> {
             policies_for_server,
             vc_for_server,
             settings_state,
+            transports_for_server,
         ).await {
             tracing::error!("API server failed: {}", e);
         }
@@ -199,6 +203,7 @@ async fn start_api_server(
     policies: Arc<tokio::sync::RwLock<policies::Policies>>,
     virtual_connector: Arc<VirtualConnector>,
     settings_state: SettingsState,
+    transports: Vec<String>,
 ) -> anyhow::Result<()> {
     use axum::{
         extract::{Path, State},
@@ -207,6 +212,7 @@ async fn start_api_server(
         Json, Router,
     };
     use tower_http::cors::{CorsLayer, Any};
+    use tower_http::services::ServeDir;
     use serde_json::json;
     use prometheus::{TextEncoder, Encoder};
 
@@ -267,10 +273,13 @@ async fn start_api_server(
         String::from_utf8(buffer)
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
     }
-    async fn get_status(State(state): State<Arc<server_state::ServerState>>) -> Json<serde_json::Value> {
-        let connections = state.get_connections().await;
-        let tools = state.get_tools().await;
-        let context_engine = state.get_context_engine_status().await;
+    async fn get_status(
+        State((server_state, transports, native_available, wasi_available)):
+        State<(Arc<server_state::ServerState>, Vec<String>, bool, bool)>
+    ) -> Json<serde_json::Value> {
+        let connections = server_state.get_connections().await;
+        let tools = server_state.get_tools().await;
+        let context_engine = server_state.get_context_engine_status().await;
         
         Json(json!({
             "version": VERSION,
@@ -278,12 +287,37 @@ async fn start_api_server(
             "profile": "dev",
             "context_engine_enabled": context_engine,
             "tools_count": tools.len(),
-            "connections": connections
+            "connections": connections,
+            "transports": transports,
+            "runtimes": {
+                "native_available": native_available,
+                "wasi_available": wasi_available
+            }
         }))
     }
 
     async fn get_tools(State(state): State<Arc<server_state::ServerState>>) -> Json<Vec<server_state::ToolStatus>> {
         Json(state.get_tools().await)
+    }
+
+    async fn get_tool_manifests() -> Json<serde_json::Value> {
+        use std::fs;
+        use std::path::Path;
+        let dir = Path::new(".mcp/tools");
+        let mut manifests: Vec<serde_json::Value> = Vec::new();
+        if let Ok(entries) = fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().and_then(|s| s.to_str()) == Some("json") {
+                    if let Ok(content) = fs::read_to_string(&path) {
+                        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                            manifests.push(json);
+                        }
+                    }
+                }
+            }
+        }
+        Json(serde_json::json!({ "manifests": manifests }))
     }
 
     async fn toggle_context_engine(
@@ -454,7 +488,22 @@ async fn start_api_server(
     let policies_state = policies.clone();
     let vc_state = virtual_connector.clone();
     
-    let app = Router::new()
+    // Check runtime availability
+    let native_available = which::which("node").is_ok();
+    let wasi_available = which::which("wasmtime").is_ok();
+    let status_state = (state.clone(), transports.clone(), native_available, wasi_available);
+    
+    // Static file serving for Admin UI
+    let static_dir = std::path::PathBuf::from("admin-web/out");
+    let serve_static = if static_dir.exists() {
+        tracing::info!("Serving Admin UI from: {:?}", static_dir);
+        Some(ServeDir::new(static_dir).append_index_html_on_directories(true))
+    } else {
+        tracing::warn!("Admin UI not built. Run 'cd admin-web && npm run build' to create static files");
+        None
+    };
+    
+    let mut app = Router::new()
         // Health & Metrics
         .route("/api/health", get(|| async { "OK" }))
         .route("/metrics", get(get_metrics).with_state(metrics_state))
@@ -463,8 +512,9 @@ async fn start_api_server(
         .route("/api/connector/virtual/connect", post(virtual_connect).with_state(vc_state.clone()))
         .route("/api/connector/virtual/disconnect", post(virtual_disconnect).with_state(vc_state))
         // Tools & Execution
-        .route("/api/status", get(get_status))
+        .route("/api/status", get(get_status).with_state(status_state))
         .route("/api/tools", get(get_tools))
+        .route("/api/tool-manifests", get(get_tool_manifests))
         .route("/api/tools/execute", post(execute_tool).with_state(executor_state))
         .route("/api/context-engine", post(toggle_context_engine))
         .route("/api/tools/:name", patch(toggle_tool))
@@ -483,6 +533,11 @@ async fn start_api_server(
                 .allow_headers(Any),
         )
         .with_state(state);
+    
+    // Add static file serving if Admin UI is built
+    if let Some(serve_dir) = serve_static {
+        app = app.fallback_service(serve_dir);
+    }
 
     let addr = std::net::SocketAddr::from(([0, 0, 0, 0], port));
     tracing::info!("API server listening on {}", addr);

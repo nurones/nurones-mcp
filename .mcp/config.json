@@ -45,7 +45,7 @@
     "defaultRole": "operator"
   },
   "server": {
-    "port": 4050
+    "port": 50550
   },
   "transports": [
     "stdio",
