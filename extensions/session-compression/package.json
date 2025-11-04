@@ -9,18 +9,26 @@
     "watch": "tsc --watch",
     "test": "jest"
   },
-  "keywords": ["mcp", "session", "compression", "timeline"],
+  "keywords": [
+    "mcp",
+    "session",
+    "compression",
+    "timeline"
+  ],
   "author": "Nurones",
   "license": "MIT",
   "dependencies": {
+    "@notionhq/client": "^2.3.0",
     "date-fns": "^2.30.0",
     "date-fns-tz": "^2.0.0",
+    "glob": "^10.3.10",
     "js-yaml": "^4.1.0",
-    "glob": "^10.3.10"
+    "openai": "^4.104.0",
+    "rouge": "^1.0.3"
   },
   "devDependencies": {
-    "@types/node": "^20.10.0",
     "@types/js-yaml": "^4.0.9",
+    "@types/node": "^20.10.0",
     "typescript": "^5.3.0"
   }
 }

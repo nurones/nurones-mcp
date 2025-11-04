@@ -1,9 +1,9 @@
 {
   "name": "session.compress",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "entry": "native://extensions/session-compression",
   "permissions": ["read", "write"],
-  "description": "Compress session transcripts into digestible summaries with timeline management",
+  "description": "Compress session transcripts with LLM-powered tiers, quality scoring, and multi-source support (Path A + Path B)",
   "schema": {
     "input": {
       "type": "object",
@@ -28,6 +28,15 @@
                   "kind": { "const": "file" },
                   "path": { "type": "string" }
                 }
+              },
+              {
+                "type": "object",
+                "required": ["kind", "url"],
+                "properties": {
+                  "kind": { "const": "notion" },
+                  "url": { "type": "string" },
+                  "bearerSecretRef": { "type": "string" }
+                }
               }
             ]
           }
@@ -38,6 +47,15 @@
         "output_dir": { "type": "string", "default": "/tmp/summaries" },
         "filename_scheme": { "enum": ["date_session_len", "source_len"], "default": "date_session_len" },
         "dry_run": { "type": "boolean", "default": false },
+        "compression_tier": { "enum": ["T0", "T1", "T2", "T3"], "default": "T0" },
+        "enable_quality_check": { "type": "boolean", "default": false },
+        "llm_config": {
+          "type": "object",
+          "properties": {
+            "provider": { "enum": ["openai", "anthropic"], "default": "openai" },
+            "apiKey": { "type": "string" }
+          }
+        },
         "context_frame": { "type": "object" },
         "reason_trace_id": { "type": "string" },
         "tenant_id": { "type": "string" }

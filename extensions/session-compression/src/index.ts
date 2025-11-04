@@ -1,6 +1,6 @@
 /**
  * Session Compression Tool - Main Entry Point
- * Path A: Minimal viable implementation
+ * Path A + Path B: Full implementation with LLM, quality scoring, and Notion
  */
 
 import * as fs from 'fs';
@@ -15,6 +15,9 @@ import {
 } from './types';
 import { parseTimestamp, generateSessionId } from './timestamp-parser';
 import { compressDigest, formatSessionDigest } from './compressor';
+import { LLMCompressor, CompressionTier } from './llm-compressor';
+import { QualityScorer } from './quality-scorer';
+import { NotionFetcher } from './notion-client';
 
 const DEFAULT_OUTPUT_DIR = '/tmp/summaries';
 const DEFAULT_TIMEZONE = 'Australia/Adelaide';
@@ -30,6 +33,11 @@ async function processSource(
     timezone: string;
     outputDir: string;
     dryRun: boolean;
+    tier: CompressionTier;
+    enableQualityCheck: boolean;
+    llmCompressor?: LLMCompressor;
+    qualityScorer?: QualityScorer;
+    notionFetcher?: NotionFetcher;
   }
 ): Promise<SessionDigest> {
   let content: string;
@@ -41,6 +49,11 @@ async function processSource(
   } else if (source.kind === 'file') {
     filepath = source.path;
     content = fs.readFileSync(filepath, 'utf-8');
+  } else if (source.kind === 'notion' && options.notionFetcher) {
+    const pageId = NotionFetcher.extractPageId(source.url);
+    const page = await options.notionFetcher.fetchPage(pageId);
+    content = page.content;
+    filepath = source.url;
   } else {
     throw new Error(`Unsupported source kind: ${(source as any).kind}`);
   }
@@ -51,13 +64,68 @@ async function processSource(
   // Generate session ID
   const sessionId = generateSessionId(content, filepath);
   
-  // Compress content
-  const compressed = compressDigest(content, {
+  // Compress content using appropriate tier
+  let compressedText: string;
+  let tier: CompressionTier = options.tier;
+  let tokensUsed = 0;
+  let llmModel: string | undefined;
+  let cost: number | undefined;
+  let qualityScore: number | undefined;
+  let qualityPassed: boolean | undefined;
+  let rollbackOccurred = false;
+  
+  if (tier === 'T0' || !options.llmCompressor) {
+    // Extractive compression (no LLM)
+    const compressed = compressDigest(content, {
+      charLimit: options.charLimit,
+      preserveMarkup: options.preserveMarkup
+    });
+    compressedText = compressed.digest;
+  } else {
+    // LLM-based compression
+    const llmResult = await options.llmCompressor.compress(content, tier, options.charLimit);
+    compressedText = llmResult.summary;
+    tokensUsed = llmResult.tokensUsed;
+    llmModel = llmResult.model;
+    cost = llmResult.cost;
+    
+    // Quality check if enabled
+    if (options.enableQualityCheck && options.qualityScorer) {
+      const score = options.qualityScorer.score(content, compressedText, tier);
+      qualityScore = score.rougeL;
+      qualityPassed = score.passed;
+      
+      // Rollback if quality too low
+      if (options.qualityScorer.shouldRollback(score)) {
+        const fallbackTier = options.qualityScorer.getFallbackTier();
+        console.warn(`Quality check failed (${(score.rougeL * 100).toFixed(1)}% < ${(score.threshold * 100).toFixed(0)}%). Rolling back ${tier} → ${fallbackTier}`);
+        
+        // Retry with fallback tier
+        if (fallbackTier === 'T0') {
+          const compressed = compressDigest(content, {
+            charLimit: options.charLimit,
+            preserveMarkup: options.preserveMarkup
+          });
+          compressedText = compressed.digest;
+        } else {
+          const fallbackResult = await options.llmCompressor.compress(content, fallbackTier, options.charLimit);
+          compressedText = fallbackResult.summary;
+          tokensUsed += fallbackResult.tokensUsed;
+          cost = (cost || 0) + (fallbackResult.cost || 0);
+        }
+        
+        tier = fallbackTier;
+        rollbackOccurred = true;
+      }
+    }
+  }
+  
+  // Create final digest with metadata
+  const compressed = compressDigest(compressedText, {
     charLimit: options.charLimit,
     preserveMarkup: options.preserveMarkup
   });
   
-  // Format final digest
   const formattedDigest = formatSessionDigest(sessionId, timestamp, compressed);
   
   // Determine output path
@@ -81,9 +149,15 @@ async function processSource(
     sha256: compressed.sha256,
     session_timestamp_utc: timestamp.utc,
     local_timestamp_adelaide: timestamp.adelaide,
-    tier_used: 'extractive',
+    tier_used: tier,
     inferred_timestamp_source: timestamp.source,
-    char_count: compressed.charCount
+    char_count: compressed.charCount,
+    tokens_used: tokensUsed > 0 ? tokensUsed : undefined,
+    llm_model: llmModel,
+    quality_score: qualityScore,
+    quality_passed: qualityPassed,
+    cost: cost,
+    rollback_occurred: rollbackOccurred
   };
 }
 
@@ -164,9 +238,46 @@ export async function compressSession(input: CompressInputV1): Promise<CompressO
   const timezone = input.timezone || DEFAULT_TIMEZONE;
   const preserveMarkup = input.preserve_markup ?? false;
   const dryRun = input.dry_run ?? false;
+  const tier: CompressionTier = input.compression_tier || 'T0';
+  const enableQualityCheck = input.enable_quality_check ?? false;
+  
+  // Initialize Path B components if tier > T0
+  let llmCompressor: LLMCompressor | undefined;
+  let qualityScorer: QualityScorer | undefined;
+  let notionFetcher: NotionFetcher | undefined;
+  
+  if (tier !== 'T0') {
+    llmCompressor = new LLMCompressor({
+      provider: input.llm_config?.provider || 'openai',
+      apiKey: input.llm_config?.apiKey
+    });
+    
+    if (!llmCompressor.isAvailable()) {
+      console.warn('LLM not available, falling back to T0');
+      // Don't initialize, will fall back to T0 in processSource
+      llmCompressor = undefined;
+    }
+  }
+  
+  if (enableQualityCheck) {
+    qualityScorer = new QualityScorer();
+  }
+  
+  // Check if any source needs Notion
+  const hasNotionSource = input.sources.some(s => s.kind === 'notion');
+  if (hasNotionSource) {
+    notionFetcher = new NotionFetcher();
+    if (!notionFetcher.isAvailable()) {
+      throw new Error('Notion API key not configured. Set NOTION_API_KEY environment variable.');
+    }
+  }
   
   // Process all sources
   const summaries: SessionDigest[] = [];
+  let totalTokens = 0;
+  let totalCost = 0;
+  let rollbackCount = 0;
+  const qualityScores: number[] = [];
   
   for (const source of input.sources) {
     const summary = await processSource(source, {
@@ -174,10 +285,26 @@ export async function compressSession(input: CompressInputV1): Promise<CompressO
       preserveMarkup,
       timezone,
       outputDir,
-      dryRun
+      dryRun,
+      tier,
+      enableQualityCheck,
+      llmCompressor,
+      qualityScorer,
+      notionFetcher
     });
     summaries.push(summary);
+    
+    // Aggregate metrics
+    if (summary.tokens_used) totalTokens += summary.tokens_used;
+    if (summary.cost) totalCost += summary.cost;
+    if (summary.rollback_occurred) rollbackCount++;
+    if (summary.quality_score !== undefined) qualityScores.push(summary.quality_score);
   }
+  
+  // Calculate average quality score
+  const avgQualityScore = qualityScores.length > 0
+    ? qualityScores.reduce((a, b) => a + b, 0) / qualityScores.length
+    : undefined;
   
   // Build index and timeline
   const indexPath = buildIndex(summaries, outputDir, dryRun);
@@ -188,7 +315,11 @@ export async function compressSession(input: CompressInputV1): Promise<CompressO
       processed: summaries.length,
       written: dryRun ? 0 : summaries.length,
       dry_run: dryRun,
-      timeline_updated: !dryRun
+      timeline_updated: !dryRun,
+      total_tokens_used: totalTokens > 0 ? totalTokens : undefined,
+      total_cost: totalCost > 0 ? totalCost : undefined,
+      quality_rollbacks: rollbackCount > 0 ? rollbackCount : undefined,
+      avg_quality_score: avgQualityScore
     },
     summaries,
     index_path: indexPath,
