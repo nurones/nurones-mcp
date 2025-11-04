@@ -1,9 +1,9 @@
 {
   "name": "session.compress",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "entry": "native://extensions/session-compression",
-  "permissions": ["read", "write"],
-  "description": "Production-grade session compression with LLM tiers, quality scoring, idempotency, and multi-source support",
+  "permissions": ["read", "write", "observability:emit"],
+  "description": "Production-grade session compression with LLM tiers, RBAC, observability (Prometheus + OTel), and idempotency",
   "schema": {
     "input": {
       "type": "object",

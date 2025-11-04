@@ -20,6 +20,9 @@ import { QualityScorer } from './quality-scorer';
 import { NotionFetcher } from './notion-client';
 import { IdempotencyManager } from './idempotency';
 import { Logger } from './logger';
+import { metrics } from './metrics';
+import { tracer } from './tracing';
+import { rbac } from './rbac';
 
 const DEFAULT_OUTPUT_DIR = '/tmp/summaries';
 const DEFAULT_TIMEZONE = 'Australia/Adelaide';
@@ -242,28 +245,57 @@ function buildTimeline(
 }
 
 /**
- * Main compression function with idempotency
+ * Main compression function with full observability and RBAC
  */
 export async function compressSession(input: CompressInputV1): Promise<CompressOutputV1> {
-  // Initialize logger with context
-  const logger = new Logger({
+  // Start root trace span
+  const rootSpan = tracer.startSpan('session.compress', {
     reason_trace_id: input.reason_trace_id,
     tenant_id: input.tenant_id,
-    operation: 'session.compress'
-  });
-  
-  logger.info('Starting session compression', {
-    sources: input.sources.length,
+    sources_count: input.sources.length,
     char_limit: input.char_limit,
     tier: input.compression_tier || 'T0'
   });
-  
-  const outputDir = input.output_dir || DEFAULT_OUTPUT_DIR;
-  const timezone = input.timezone || DEFAULT_TIMEZONE;
-  const preserveMarkup = input.preserve_markup ?? false;
-  const dryRun = input.dry_run ?? false;
-  const tier: CompressionTier = input.compression_tier || 'T0';
-  const enableQualityCheck = input.enable_quality_check ?? false;
+
+  const startTime = Date.now();
+
+  try {
+    // Initialize logger with context
+    const logger = new Logger({
+      reason_trace_id: input.reason_trace_id,
+      tenant_id: input.tenant_id,
+      operation: 'session.compress'
+    });
+    
+    logger.info('Starting session compression', {
+      sources: input.sources.length,
+      char_limit: input.char_limit,
+      tier: input.compression_tier || 'T0'
+    });
+    
+    const outputDir = input.output_dir || DEFAULT_OUTPUT_DIR;
+    const timezone = input.timezone || DEFAULT_TIMEZONE;
+    const preserveMarkup = input.preserve_markup ?? false;
+    const dryRun = input.dry_run ?? false;
+    let tier: CompressionTier = input.compression_tier || 'T0';
+    
+    // RBAC: Auto-tune tier based on risk level
+    tier = rbac.autoTuneTier(tier, input.context_frame);
+    tracer.addEvent('rbac_tier_autotuned', { original: input.compression_tier, final: tier });
+    
+    // RBAC: Validate character limit
+    rbac.validateCharLimit(input.char_limit, input.context_frame);
+    tracer.addEvent('rbac_char_limit_validated');
+    
+    // RBAC: Validate tier
+    rbac.validateTier(tier, input.context_frame);
+    tracer.addEvent('rbac_tier_validated');
+    
+    // RBAC: Check if quality check is required
+    const enableQualityCheck = input.enable_quality_check ?? rbac.requiresQualityCheck(input.context_frame);
+    if (enableQualityCheck) {
+      tracer.addEvent('quality_check_enabled', { required_by_rbac: rbac.requiresQualityCheck(input.context_frame) });
+    }
   
   // Idempotency check
   const idempotency = new IdempotencyManager();
@@ -324,6 +356,10 @@ export async function compressSession(input: CompressInputV1): Promise<CompressO
   // Check if any source needs Notion
   const hasNotionSource = input.sources.some(s => s.kind === 'notion');
   if (hasNotionSource) {
+    // RBAC: Validate Notion sources are allowed
+    rbac.validateNotionSource(input.context_frame);
+    tracer.addEvent('rbac_notion_validated');
+    
     notionFetcher = new NotionFetcher();
     if (!notionFetcher.isAvailable()) {
       logger.error('Notion API key not configured');
@@ -405,5 +441,34 @@ export async function compressSession(input: CompressInputV1): Promise<CompressO
     avg_quality: result.report.avg_quality_score
   });
   
+  // Emit metrics
+  const latency = Date.now() - startTime;
+  metrics.recordLatency(latency, tier, 'compress_session');
+  if (totalTokens > 0) {
+    metrics.recordTokensSaved(totalTokens, tier, input.tenant_id);
+  }
+  if (totalCost > 0) {
+    metrics.recordCost(totalCost, tier, input.tenant_id);
+  }
+  if (avgQualityScore !== undefined) {
+    metrics.recordQualityScore(avgQualityScore, tier, input.tenant_id);
+  }
+  if (rollbackCount > 0) {
+    metrics.recordRougeFallback(input.compression_tier || 'T0', tier, input.tenant_id);
+  }
+  metrics.recordWrites(dryRun ? 0 : summaries.length, input.tenant_id);
+  
+  // Emit observability data
+  await metrics.emit();
+  await tracer.emit();
+  
   return result;
+  } catch (error) {
+    // End span with error
+    tracer.endSpan(rootSpan, error instanceof Error ? error : new Error(String(error)));
+    throw error;
+  } finally {
+    // End span on success
+    tracer.endSpan(rootSpan);
+  }
 }
