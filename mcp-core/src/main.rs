@@ -161,6 +161,7 @@ async fn main() -> anyhow::Result<()> {
     let transports_for_server: Vec<String> = config.transports.iter()
         .map(|t| format!("{:?}", t).to_lowercase())
         .collect();
+    let otel_exporter_for_server = config.observability.otel_exporter.clone();
     tokio::spawn(async move {
         if let Err(e) = start_api_server(
             port,
@@ -170,6 +171,7 @@ async fn main() -> anyhow::Result<()> {
             vc_for_server,
             settings_state,
             transports_for_server,
+            otel_exporter_for_server,
         ).await {
             tracing::error!("API server failed: {}", e);
         }
@@ -204,6 +206,7 @@ async fn start_api_server(
     virtual_connector: Arc<VirtualConnector>,
     settings_state: SettingsState,
     transports: Vec<String>,
+    otel_exporter: String,
 ) -> anyhow::Result<()> {
     use axum::{
         extract::{Path, State},
@@ -274,8 +277,8 @@ async fn start_api_server(
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
     }
     async fn get_status(
-        State((server_state, transports, native_available, wasi_available)):
-        State<(Arc<server_state::ServerState>, Vec<String>, bool, bool)>
+        State((server_state, transports, native_available, wasi_available, otel_exporter)):
+        State<(Arc<server_state::ServerState>, Vec<String>, bool, bool, String)>
     ) -> Json<serde_json::Value> {
         let connections = server_state.get_connections().await;
         let tools = server_state.get_tools().await;
@@ -292,6 +295,9 @@ async fn start_api_server(
             "runtimes": {
                 "native_available": native_available,
                 "wasi_available": wasi_available
+            },
+            "observability": {
+                "otel_exporter": otel_exporter
             }
         }))
     }
@@ -491,7 +497,7 @@ async fn start_api_server(
     // Check runtime availability
     let native_available = which::which("node").is_ok();
     let wasi_available = which::which("wasmtime").is_ok();
-    let status_state = (state.clone(), transports.clone(), native_available, wasi_available);
+    let status_state = (state.clone(), transports.clone(), native_available, wasi_available, otel_exporter.clone());
     
     // Static file serving for Admin UI
     let static_dir = std::path::PathBuf::from("admin-web/out");

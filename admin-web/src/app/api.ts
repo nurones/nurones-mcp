@@ -12,6 +12,9 @@ export interface ServerStatus {
     native_available: boolean
     wasi_available: boolean
   }
+  observability?: {
+    otel_exporter?: string
+  }
 }
 
 export interface Connection {

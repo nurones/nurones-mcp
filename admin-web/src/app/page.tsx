@@ -107,7 +107,7 @@ export default function Home() {
         {activeTab === 'connectors' && <ConnectorsTab />}
         {activeTab === 'test-tools' && <TestToolsPage />}
         {activeTab === 'policies' && <PoliciesPage />}
-        {activeTab === 'telemetry' && <TelemetryTab />}
+        {activeTab === 'telemetry' && <TelemetryTab serverStatus={serverStatus} />}
         {activeTab === 'context-monitor' && <ContextMonitorTab serverStatus={serverStatus} />}
       </main>
     </div>
@@ -477,9 +477,38 @@ function ConnectorsTab() {
   )
 }
 
-function TelemetryTab() {
+function TelemetryTab({ serverStatus }: { serverStatus: ServerStatus | null }) {
   const metricsUrl = typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}:50550/metrics` : '/metrics'
-  
+  const [metrics, setMetrics] = useState<{ name: string; value: string }[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const loadMetrics = async () => {
+      try {
+        const res = await fetch('/metrics')
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const text = await res.text()
+        const rows: { name: string; value: string }[] = []
+        for (const line of text.split('\n')) {
+          const m = line.match(/^([a-zA-Z_:][a-zA-Z0-9_:]*)\s+(\d+(?:\.\d+)?)/)
+          if (m) rows.push({ name: m[1], value: m[2] })
+        }
+        setMetrics(rows)
+        setError(null)
+      } catch (e: any) {
+        setError(e.message)
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadMetrics()
+    const id = setInterval(loadMetrics, 10000)
+    return () => clearInterval(id)
+  }, [])
+
+  const otelUrl = serverStatus?.observability?.otel_exporter || 'not configured'
+
   return (
     <div className="space-y-6">
       <h2 className="text-xl font-semibold">Observability & Telemetry</h2>
@@ -498,12 +527,37 @@ function TelemetryTab() {
           >
             Open Metrics
           </a>
+          <div className="mt-4">
+            <h4 className="text-sm font-semibold text-gray-300 mb-2">Current Metrics</h4>
+            {loading && <div className="text-sm text-gray-400">Loading metrics...</div>}
+            {error && <div className="text-sm text-red-400">{error}</div>}
+            {!loading && !error && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-gray-400">
+                      <th className="text-left py-2">Name</th>
+                      <th className="text-left py-2">Value</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-700">
+                    {metrics.map((m) => (
+                      <tr key={`${m.name}-${m.value}`}>
+                        <td className="py-2 text-white font-mono">{m.name}</td>
+                        <td className="py-2 text-gray-300 font-mono">{m.value}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
         
         <div className="bg-gray-800 rounded-lg p-6">
           <h3 className="font-semibold mb-4">OpenTelemetry</h3>
-          <p className="text-sm text-gray-400 mb-4">
-            Exporter: <code className="text-cyan-400">http://localhost:4318</code>
+          <p className="text-sm text-gray-400 mb-2">
+            Exporter: <code className="text-cyan-400">{otelUrl}</code>
           </p>
           <p className="text-xs text-gray-500 mb-4">
             External collector endpoint (not served by MCP)
