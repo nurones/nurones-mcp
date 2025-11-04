@@ -456,6 +456,8 @@ function ConnectorsTab() {
 }
 
 function TelemetryTab() {
+  const metricsUrl = typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}:50550/metrics` : '/metrics'
+  
   return (
     <div className="space-y-6">
       <h2 className="text-xl font-semibold">Observability & Telemetry</h2>
@@ -464,10 +466,10 @@ function TelemetryTab() {
         <div className="bg-gray-800 rounded-lg p-6">
           <h3 className="font-semibold mb-4">Prometheus Metrics</h3>
           <p className="text-sm text-gray-400 mb-4">
-            Endpoint: <code className="text-cyan-400">http://localhost:9464/metrics</code>
+            Endpoint: <code className="text-cyan-400">{metricsUrl}</code>
           </p>
           <a
-            href="http://localhost:9464/metrics"
+            href={metricsUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-block px-4 py-2 bg-cyan-600 hover:bg-cyan-700 rounded transition-colors"
@@ -481,9 +483,12 @@ function TelemetryTab() {
           <p className="text-sm text-gray-400 mb-4">
             Exporter: <code className="text-cyan-400">http://localhost:4318</code>
           </p>
+          <p className="text-xs text-gray-500 mb-4">
+            External collector endpoint (not served by MCP)
+          </p>
           <div className="flex items-center gap-2">
-            <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-            <span className="text-sm text-gray-400">Connected</span>
+            <span className="w-2 h-2 bg-gray-500 rounded-full"></span>
+            <span className="text-sm text-gray-400">External service</span>
           </div>
         </div>
       </div>
