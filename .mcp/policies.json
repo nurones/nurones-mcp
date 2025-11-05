@@ -22,6 +22,9 @@
     "/tmp/summaries",
     "/home/goldiuns/projects/nurones-au/nurones-cide/contracts",
     "/home/goldiuns/projects/nurones-au/nurones-cide/contracts/COIDE-CCC-001/docs",
-    "/home/goldiuns/projects/nurones-au/nurones-mcp/docs/archive/"
+    "/home/goldiuns/projects/nurones-au/nurones-mcp/docs/archive/",
+    "/home/goldiuns/projects/nurones-au/nurones-mcp/plugins",
+    "/home/goldiuns/projects/nurones-au/nurones-mcp/extensions",
+    "/home/goldiuns/projects/nurones-au/nurones-mcp/.mcp/tools"
   ]
 }

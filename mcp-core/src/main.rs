@@ -690,14 +690,630 @@ async fn start_api_server(
         format!("active_connections={}", vc.active())
     }
 
-    async fn virtual_connect(State(vc): State<Arc<VirtualConnector>>) -> &'static str {
+    async fn virtual_connect(
+        State(vc): State<Arc<VirtualConnector>>,
+        axum::extract::Json(payload): axum::extract::Json<serde_json::Value>
+    ) -> Json<serde_json::Value> {
         vc.connect();
-        "connected"
+        
+        let client_type = payload.get("client_type")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown");
+        let transport = payload.get("transport")
+            .and_then(|v| v.as_str())
+            .unwrap_or("ws");
+        
+        Json(json!({
+            "status": "connected",
+            "connection_id": format!("virtual-{}-{}", client_type, uuid::Uuid::new_v4().to_string().split('-').next().unwrap()),
+            "transport": transport,
+            "timestamp": chrono::Utc::now().to_rfc3339()
+        }))
     }
 
-    async fn virtual_disconnect(State(vc): State<Arc<VirtualConnector>>) -> &'static str {
+    async fn virtual_disconnect(State(vc): State<Arc<VirtualConnector>>) -> Json<serde_json::Value> {
         vc.disconnect();
-        "disconnected"
+        Json(json!({
+            "status": "disconnected",
+            "timestamp": chrono::Utc::now().to_rfc3339()
+        }))
+    }
+
+    async fn create_plugin(Json(payload): Json<serde_json::Value>) -> Result<Json<serde_json::Value>, (axum::http::StatusCode, String)> {
+        use std::fs;
+        use std::io::Write;
+
+        let name = payload.get("name")
+            .and_then(|v| v.as_str())
+            .ok_or((axum::http::StatusCode::BAD_REQUEST, "Missing 'name' field".to_string()))?;
+        
+        let display_name = payload.get("displayName")
+            .and_then(|v| v.as_str())
+            .unwrap_or(name);
+        
+        let description = payload.get("description")
+            .and_then(|v| v.as_str())
+            .unwrap_or("A new MCP IDE plugin");
+        
+        let version = payload.get("version")
+            .and_then(|v| v.as_str())
+            .unwrap_or("0.1.0");
+        
+        let ide = payload.get("ide")
+            .and_then(|v| v.as_str())
+            .unwrap_or("vscode");
+        
+        let publisher = payload.get("publisher")
+            .and_then(|v| v.as_str())
+            .unwrap_or("your-publisher");
+
+        // Create plugin directory
+        let plugin_dir = format!("plugins/{}", name);
+        if std::path::Path::new(&plugin_dir).exists() {
+            return Err((axum::http::StatusCode::CONFLICT, format!("Plugin '{}' already exists", name)));
+        }
+
+        fs::create_dir_all(&plugin_dir)
+            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create directory: {}", e)))?;
+        
+        fs::create_dir_all(format!("{}/src", plugin_dir))
+            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create src directory: {}", e)))?;
+
+        // Create package.json based on IDE
+        let (engines, dev_deps, scripts) = match ide {
+            "vscode" => (
+                json!({ "vscode": "^1.90.0" }),
+                json!({
+                    "typescript": "^5.6.3",
+                    "@types/vscode": "^1.90.0",
+                    "@types/node": "^20.10.0",
+                    "@vscode/vsce": "^2.22.0"
+                }),
+                json!({
+                    "build": "tsc -p .",
+                    "watch": "tsc -w -p .",
+                    "pack": "vsce package",
+                    "vscode:prepublish": "npm run build"
+                })
+            ),
+            "qoder" => (
+                json!({ "qoder": "^0.2.0" }),
+                json!({
+                    "typescript": "^5.6.3",
+                    "@types/node": "^20.10.0"
+                }),
+                json!({
+                    "build": "tsc -p .",
+                    "watch": "tsc -w -p .",
+                    "pack": "qoder-pack",
+                    "prepublish": "npm run build"
+                })
+            ),
+            _ => (
+                json!({ "node": ">=20.0.0" }),
+                json!({
+                    "typescript": "^5.6.3",
+                    "@types/node": "^20.10.0"
+                }),
+                json!({
+                    "build": "tsc -p .",
+                    "watch": "tsc -w -p ."
+                })
+            )
+        };
+
+        let package_json = json!({
+            "name": name,
+            "displayName": display_name,
+            "description": description,
+            "version": version,
+            "publisher": publisher,
+            "engines": engines,
+            "categories": ["Other"],
+            "activationEvents": [
+                format!("onCommand:{}.openDashboard", name),
+                "onStartupFinished"
+            ],
+            "main": "./dist/extension.js",
+            "contributes": {
+                "commands": [
+                    {
+                        "command": format!("{}.openDashboard", name),
+                        "title": format!("{}: Open Dashboard", display_name)
+                    },
+                    {
+                        "command": format!("{}.showStatus", name),
+                        "title": format!("{}: Show Status", display_name)
+                    }
+                ],
+                "configuration": {
+                    "title": display_name,
+                    "properties": {
+                        format!("{}.serverUrl", name): {
+                            "type": "string",
+                            "default": "http://localhost:50550",
+                            "description": "MCP server URL"
+                        },
+                        format!("{}.autoConnect", name): {
+                            "type": "boolean",
+                            "default": true,
+                            "description": "Auto-connect on activation"
+                        }
+                    }
+                }
+            },
+            "scripts": scripts,
+            "dependencies": {},
+            "devDependencies": dev_deps
+        });
+
+        let mut pkg_file = fs::File::create(format!("{}/package.json", plugin_dir))
+            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create package.json: {}", e)))?;
+        pkg_file.write_all(serde_json::to_string_pretty(&package_json).unwrap().as_bytes())
+            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to write package.json: {}", e)))?;
+
+        // Create tsconfig.json
+        let tsconfig = json!({
+            "compilerOptions": {
+                "target": "ES2020",
+                "module": "commonjs",
+                "lib": ["ES2020"],
+                "outDir": "./dist",
+                "rootDir": "./src",
+                "strict": true,
+                "esModuleInterop": true,
+                "skipLibCheck": true,
+                "forceConsistentCasingInFileNames": true,
+                "sourceMap": true
+            },
+            "include": ["src/**/*"],
+            "exclude": ["node_modules", "dist"]
+        });
+
+        let mut ts_file = fs::File::create(format!("{}/tsconfig.json", plugin_dir))
+            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create tsconfig.json: {}", e)))?;
+        ts_file.write_all(serde_json::to_string_pretty(&tsconfig).unwrap().as_bytes())
+            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to write tsconfig.json: {}", e)))?;
+
+        // Create extension.ts
+        let extension_content = format!(r#"import * as {} from "{}";
+
+let statusBarItem: {}.StatusBarItem;
+let outputChannel: {}.OutputChannel;
+
+/**
+ * Activate plugin
+ */
+export async function activate(context: {}.ExtensionContext): Promise<void> {{
+  outputChannel = {}.window.createOutputChannel("{}");
+  outputChannel.appendLine("{} plugin activated");
+
+  // Create status bar item
+  statusBarItem = {}.window.createStatusBarItem({}.StatusBarAlignment.Right, 100);
+  statusBarItem.text = "$(check) {}";
+  statusBarItem.command = "{}.showStatus";
+  statusBarItem.show();
+  context.subscriptions.push(statusBarItem);
+
+  // Register commands
+  context.subscriptions.push(
+    {}.commands.registerCommand("{}.openDashboard", async () => {{
+      const config = {}.workspace.getConfiguration("{}");
+      const url = config.get<string>("serverUrl") ?? "http://localhost:50550";
+      outputChannel.appendLine(`Opening dashboard: ${{url}}`);
+      await {}.env.openExternal({}.Uri.parse(url));
+    }}),
+
+    {}.commands.registerCommand("{}.showStatus", async () => {{
+      {}.window.showInformationMessage("{} plugin is active");
+      outputChannel.show();
+    }})
+  );
+
+  // Auto-connect if configured
+  const config = {}.workspace.getConfiguration("{}");
+  if (config.get<boolean>("autoConnect")) {{
+    outputChannel.appendLine("Auto-connecting to MCP server...");
+    // TODO: Implement connection logic
+  }}
+
+  outputChannel.appendLine("{} plugin ready");
+}}
+
+/**
+ * Deactivate plugin
+ */
+export function deactivate(): void {{
+  outputChannel.appendLine("{} plugin deactivated");
+}}
+"#, 
+        ide, ide, ide, ide, ide, ide, display_name, display_name, 
+        ide, ide, display_name, name, ide, name, ide, name, 
+        ide, ide, ide, name, ide, display_name, ide, name, display_name, display_name
+        );
+
+        let mut ext_file = fs::File::create(format!("{}/src/extension.ts", plugin_dir))
+            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create extension.ts: {}", e)))?;
+        ext_file.write_all(extension_content.as_bytes())
+            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to write extension.ts: {}", e)))?;
+
+        // Create .gitignore
+        let gitignore = "node_modules/\ndist/\n*.vsix\n*.log\n.DS_Store\n";
+        let mut gitignore_file = fs::File::create(format!("{}/.gitignore", plugin_dir))
+            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create .gitignore: {}", e)))?;
+        gitignore_file.write_all(gitignore.as_bytes())
+            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to write .gitignore: {}", e)))?;
+
+        // Create .vscodeignore for vscode plugins
+        if ide == "vscode" {
+            let vscodeignore = ".vscode/**\n.vscode-test/**\nsrc/**\ntsconfig.json\nnode_modules/**\n*.map\n";
+            let mut vscodeignore_file = fs::File::create(format!("{}/.vscodeignore", plugin_dir))
+                .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create .vscodeignore: {}", e)))?;
+            vscodeignore_file.write_all(vscodeignore.as_bytes())
+                .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to write .vscodeignore: {}", e)))?;
+        }
+
+        // Create README.md
+        let readme = format!(r#"# {}
+
+{}
+
+## Installation
+
+```bash
+npm install
+```
+
+## Build
+
+```bash
+npm run build
+```
+
+## Development
+
+```bash
+npm run watch
+```
+
+## Package
+
+```bash
+npm run pack
+```
+
+## Configuration
+
+- **Version**: {}
+- **IDE**: {}
+- **Publisher**: {}
+
+## Usage
+
+This plugin connects to the Nurones MCP server and provides IDE integration.
+
+## License
+
+MIT
+"#, display_name, description, version, ide, publisher);
+
+        let mut readme_file = fs::File::create(format!("{}/README.md", plugin_dir))
+            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create README: {}", e)))?;
+        readme_file.write_all(readme.as_bytes())
+            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to write README: {}", e)))?;
+
+        Ok(Json(json!({
+            "success": true,
+            "plugin": {
+                "name": name,
+                "path": plugin_dir,
+                "version": version,
+                "ide": ide
+            },
+            "next_steps": [
+                format!("cd {}", plugin_dir),
+                "npm install",
+                "npm run build",
+                format!("Install in {} using the built package", ide)
+            ],
+            "message": format!("Plugin '{}' created successfully!", name)
+        })))
+    }
+
+    async fn create_extension(Json(payload): Json<serde_json::Value>) -> Result<Json<serde_json::Value>, (axum::http::StatusCode, String)> {
+        use std::fs;
+        use std::io::Write;
+
+        let name = payload.get("name")
+            .and_then(|v| v.as_str())
+            .ok_or((axum::http::StatusCode::BAD_REQUEST, "Missing 'name' field".to_string()))?;
+        
+        let description = payload.get("description")
+            .and_then(|v| v.as_str())
+            .unwrap_or("A new MCP extension");
+        
+        let version = payload.get("version")
+            .and_then(|v| v.as_str())
+            .unwrap_or("1.0.0");
+        
+        let language = payload.get("language")
+            .and_then(|v| v.as_str())
+            .unwrap_or("TypeScript");
+        
+        let entry = payload.get("entry")
+            .and_then(|v| v.as_str())
+            .unwrap_or("dist/index.js");
+        
+        let permissions: Vec<String> = payload.get("permissions")
+            .and_then(|v| v.as_array())
+            .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+            .unwrap_or_else(|| vec!["read".to_string()]);
+        
+        let create_manifest = payload.get("createManifest")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
+
+        // Create extension directory
+        let ext_dir = format!("extensions/{}", name);
+        if std::path::Path::new(&ext_dir).exists() {
+            return Err((axum::http::StatusCode::CONFLICT, format!("Extension '{}' already exists", name)));
+        }
+
+        fs::create_dir_all(&ext_dir)
+            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create directory: {}", e)))?;
+        
+        fs::create_dir_all(format!("{}/src", ext_dir))
+            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create src directory: {}", e)))?;
+
+        // Create package.json
+        let package_json = json!({
+            "name": format!("@nurones/mcp-ext-{}", name),
+            "version": version,
+            "description": description,
+            "main": entry,
+            "scripts": {
+                "build": if language == "TypeScript" { "tsc" } else { "echo 'No build needed for JavaScript'" },
+                "dev": "tsc --watch",
+                "test": "echo \"No tests configured\""
+            },
+            "keywords": ["mcp", "extension", name],
+            "author": "",
+            "license": "MIT",
+            "devDependencies": if language == "TypeScript" {
+                json!({
+                    "typescript": "^5.0.0",
+                    "@types/node": "^20.0.0"
+                })
+            } else {
+                json!({})
+            },
+            "mcp": {
+                "permissions": permissions,
+                "entry": entry
+            }
+        });
+
+        let mut pkg_file = fs::File::create(format!("{}/package.json", ext_dir))
+            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create package.json: {}", e)))?;
+        pkg_file.write_all(serde_json::to_string_pretty(&package_json).unwrap().as_bytes())
+            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to write package.json: {}", e)))?;
+
+        // Create tsconfig.json if TypeScript
+        if language == "TypeScript" {
+            let tsconfig = json!({
+                "compilerOptions": {
+                    "target": "ES2020",
+                    "module": "commonjs",
+                    "lib": ["ES2020"],
+                    "outDir": "./dist",
+                    "rootDir": "./src",
+                    "strict": true,
+                    "esModuleInterop": true,
+                    "skipLibCheck": true,
+                    "forceConsistentCasingInFileNames": true,
+                    "declaration": true,
+                    "declarationMap": true,
+                    "sourceMap": true
+                },
+                "include": ["src/**/*"],
+                "exclude": ["node_modules", "dist"]
+            });
+
+            let mut ts_file = fs::File::create(format!("{}/tsconfig.json", ext_dir))
+                .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create tsconfig.json: {}", e)))?;
+            ts_file.write_all(serde_json::to_string_pretty(&tsconfig).unwrap().as_bytes())
+                .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to write tsconfig.json: {}", e)))?;
+        }
+
+        // Create main source file
+        let main_ext = if language == "TypeScript" { "ts" } else { "js" };
+        let main_content = if language == "TypeScript" {
+            format!(r#"/**
+ * MCP Extension: {}
+ * {}
+ */
+
+export interface ToolInput {{
+  [key: string]: any;
+}}
+
+export interface ToolOutput {{
+  success: boolean;
+  data?: any;
+  error?: string;
+}}
+
+/**
+ * Main extension entry point
+ * This function is called when the extension is loaded
+ */
+export async function initialize(): Promise<void> {{
+  console.log('Extension {{}} initialized', '{}');
+}}
+
+/**
+ * Example tool implementation
+ * Rename and modify this to implement your tool logic
+ */
+export async function executeTool(input: ToolInput): Promise<ToolOutput> {{
+  try {{
+    // Your tool logic here
+    return {{
+      success: true,
+      data: {{
+        message: 'Tool executed successfully',
+        input
+      }}
+    }};
+  }} catch (error) {{
+    return {{
+      success: false,
+      error: error instanceof Error ? error.message : String(error)
+    }};
+  }}
+}}
+"#, name, description, name)
+        } else {
+            format!(r#"/**
+ * MCP Extension: {}
+ * {}
+ */
+
+/**
+ * Main extension entry point
+ */
+async function initialize() {{
+  console.log('Extension {{}} initialized', '{}');
+}}
+
+/**
+ * Example tool implementation
+ */
+async function executeTool(input) {{
+  try {{
+    return {{
+      success: true,
+      data: {{
+        message: 'Tool executed successfully',
+        input
+      }}
+    }};
+  }} catch (error) {{
+    return {{
+      success: false,
+      error: error.message
+    }};
+  }}
+}}
+
+module.exports = {{ initialize, executeTool }};
+"#, name, description, name)
+        };
+
+        let mut main_file = fs::File::create(format!("{}/src/index.{}", ext_dir, main_ext))
+            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create main source file: {}", e)))?;
+        main_file.write_all(main_content.as_bytes())
+            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to write main source file: {}", e)))?;
+
+        // Create README.md
+        let readme = format!(r#"# {}
+
+{}
+
+## Installation
+
+```bash
+npm install
+```
+
+## Build
+
+```bash
+npm run build
+```
+
+## Development
+
+```bash
+npm run dev
+```
+
+## Configuration
+
+- **Version**: {}
+- **Language**: {}
+- **Entry Point**: {}
+- **Permissions**: {}
+
+## Usage
+
+This extension provides tools for the Nurones MCP server.
+
+## License
+
+MIT
+"#, name, description, version, language, entry, permissions.join(", "));
+
+        let mut readme_file = fs::File::create(format!("{}/README.md", ext_dir))
+            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create README: {}", e)))?;
+        readme_file.write_all(readme.as_bytes())
+            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to write README: {}", e)))?;
+
+        // Create manifest in .mcp/tools/ if requested
+        let mut manifest_path = None;
+        if create_manifest {
+            fs::create_dir_all(".mcp/tools")
+                .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create .mcp/tools directory: {}", e)))?;
+
+            let manifest = json!({
+                "id": format!("ext.{}", name),
+                "name": name,
+                "version": version,
+                "description": description,
+                "type": "extension",
+                "runtime": language,
+                "entry": format!("extensions/{}/{}", name, entry),
+                "permissions": permissions,
+                "enabled": true,
+                "metadata": {
+                    "created": chrono::Utc::now().to_rfc3339(),
+                    "author": "generated"
+                }
+            });
+
+            let manifest_file_path = format!(".mcp/tools/{}.json", name);
+            let mut manifest_file = fs::File::create(&manifest_file_path)
+                .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create manifest: {}", e)))?;
+            manifest_file.write_all(serde_json::to_string_pretty(&manifest).unwrap().as_bytes())
+                .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to write manifest: {}", e)))?;
+            
+            manifest_path = Some(manifest_file_path);
+        }
+
+        // Create .gitignore
+        let gitignore = "node_modules/\ndist/\n*.log\n.DS_Store\n";
+        let mut gitignore_file = fs::File::create(format!("{}/.gitignore", ext_dir))
+            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create .gitignore: {}", e)))?;
+        gitignore_file.write_all(gitignore.as_bytes())
+            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to write .gitignore: {}", e)))?;
+
+        Ok(Json(json!({
+            "success": true,
+            "extension": {
+                "name": name,
+                "path": ext_dir,
+                "version": version,
+                "language": language,
+                "manifest": manifest_path
+            },
+            "next_steps": [
+                format!("cd {}", ext_dir),
+                "npm install",
+                "npm run build",
+                "Restart MCP server to load the extension"
+            ],
+            "message": format!("Extension '{}' created successfully!", name)
+        })))
     }
 
     // Build router
@@ -741,7 +1357,9 @@ async fn start_api_server(
         .route("/api/tools", get(get_tools).post(create_tool))
         .route("/api/tool-manifests", get(get_tool_manifests))
         .route("/api/plugins", get(get_plugins))
+        .route("/api/plugins/create", post(create_plugin))
         .route("/api/extensions", get(get_extensions))
+        .route("/api/extensions/create", post(create_extension))
         .route("/api/connectors", get(get_connectors))
         .route("/api/tools/execute", post(execute_tool).with_state(executor_state))
         .route("/api/context-engine", post(toggle_context_engine))
