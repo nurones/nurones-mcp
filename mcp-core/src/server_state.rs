@@ -89,6 +89,30 @@ impl ServerState {
         tools.values().cloned().collect()
     }
 
+    pub async fn get_tool(&self, name: &str) -> Option<ToolStatus> {
+        let tools = self.tools.read().await;
+        tools.get(name).cloned()
+    }
+
+    pub async fn update_tool(&self, name: &str, tool_status: ToolStatus) -> Result<(), String> {
+        let mut tools = self.tools.write().await;
+        if tools.contains_key(name) {
+            tools.insert(name.to_string(), tool_status);
+            Ok(())
+        } else {
+            Err(format!("Tool not found: {}", name))
+        }
+    }
+
+    pub async fn delete_tool(&self, name: &str) -> Result<(), String> {
+        let mut tools = self.tools.write().await;
+        if tools.remove(name).is_some() {
+            Ok(())
+        } else {
+            Err(format!("Tool not found: {}", name))
+        }
+    }
+
     pub async fn get_context_engine_status(&self) -> bool {
         *self.context_engine_enabled.read().await
     }

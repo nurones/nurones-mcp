@@ -19,7 +19,10 @@
     "fs_allowlist": [
       "/workspace",
       "/tmp",
-      "/tmp/summaries"
+      "/tmp/summaries",
+      "/home/goldiuns/projects/nurones-au/nurones-cide/contracts",
+      "/home/goldiuns/projects/nurones-au/nurones-cide/contracts/COIDE-CCC-001/docs",
+      "/home/goldiuns/projects/nurones-au/nurones-mcp/docs/archive/"
     ],
     "roles": {
       "admin": [

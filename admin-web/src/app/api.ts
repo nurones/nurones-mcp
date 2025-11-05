@@ -77,6 +77,37 @@ export async function fetchTools(): Promise<Tool[]> {
   return response.json()
 }
 
+export async function createTool(tool: Omit<Tool, 'name'> & { name: string }): Promise<void> {
+  const response = await fetch(`${API_BASE}/api/tools`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(tool),
+  })
+  if (!response.ok) {
+    throw new Error(`Failed to create tool: ${response.statusText}`)
+  }
+}
+
+export async function updateTool(toolName: string, updates: Partial<Omit<Tool, 'name'>>): Promise<void> {
+  const response = await fetch(`${API_BASE}/api/tools/${toolName}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates),
+  })
+  if (!response.ok) {
+    throw new Error(`Failed to update tool: ${response.statusText}`)
+  }
+}
+
+export async function deleteTool(toolName: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/api/tools/${toolName}`, {
+    method: 'DELETE',
+  })
+  if (!response.ok) {
+    throw new Error(`Failed to delete tool: ${response.statusText}`)
+  }
+}
+
 // Virtual connector API
 export async function virtualConnectorHealth(): Promise<{ active_connections: number }> {
   const response = await fetch(`${API_BASE}/api/connector/virtual/health`)
@@ -137,4 +168,68 @@ export async function fetchExtensionModules(): Promise<ExtensionModule[]> {
     entry,
     tools
   }))
+}
+
+export interface Plugin {
+  name: string
+  description: string
+  version: string
+  path: string
+  language: string
+  commands: number
+  is_template: boolean
+}
+
+export interface Extension {
+  name: string
+  description: string
+  version: string
+  path: string
+  language: string
+}
+
+export interface Transport {
+  name: string
+  type: string
+  enabled: boolean
+  port?: number
+  description: string
+}
+
+export interface ConnectorInfo {
+  transports: Transport[]
+  server_port: number
+  virtual_connector: {
+    enabled: boolean
+    type: string
+    description: string
+    active_connections: number
+  }
+  connections: Connection[]
+}
+
+export async function fetchPlugins(): Promise<Plugin[]> {
+  const response = await fetch(`${API_BASE}/api/plugins`)
+  if (!response.ok) {
+    throw new Error(`Failed to fetch plugins: ${response.statusText}`)
+  }
+  const data = await response.json()
+  return data.plugins || []
+}
+
+export async function fetchExtensions(): Promise<Extension[]> {
+  const response = await fetch(`${API_BASE}/api/extensions`)
+  if (!response.ok) {
+    throw new Error(`Failed to fetch extensions: ${response.statusText}`)
+  }
+  const data = await response.json()
+  return data.extensions || []
+}
+
+export async function fetchConnectors(): Promise<ConnectorInfo> {
+  const response = await fetch(`${API_BASE}/api/connectors`)
+  if (!response.ok) {
+    throw new Error(`Failed to fetch connectors: ${response.statusText}`)
+  }
+  return response.json()
 }

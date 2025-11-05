@@ -25,7 +25,7 @@ export default function TestToolsPage() {
 
     try {
       const input = JSON.parse(toolInput)
-      const response = await fetch('http://localhost:4050/api/tools/execute', {
+      const response = await fetch('/api/tools/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -110,7 +110,7 @@ export default function TestToolsPage() {
             {error && (
               <div className="bg-red-900 border border-red-700 rounded p-4">
                 <h3 className="font-semibold text-red-300 mb-2">Error</h3>
-                <pre className="text-sm text-red-200 whitespace-pre-wrap">{error}</pre>
+                <pre className="text-sm text-red-200 whitespace-pre-wrap break-words overflow-x-auto">{error}</pre>
               </div>
             )}
 
@@ -130,7 +130,7 @@ export default function TestToolsPage() {
                 {result.output && (
                   <div>
                     <h3 className="font-semibold text-gray-300 mb-2">Output:</h3>
-                    <pre className="bg-gray-900 p-4 rounded text-sm text-gray-300 overflow-x-auto whitespace-pre-wrap">
+                    <pre className="bg-gray-900 p-4 rounded text-sm text-gray-300 overflow-x-auto whitespace-pre-wrap break-words max-h-96">
                       {JSON.stringify(result.output, null, 2)}
                     </pre>
                   </div>
@@ -139,18 +139,20 @@ export default function TestToolsPage() {
                 {result.error && (
                   <div>
                     <h3 className="font-semibold text-red-300 mb-2">Error:</h3>
-                    <pre className="bg-gray-900 p-4 rounded text-sm text-red-200">
+                    <pre className="bg-gray-900 p-4 rounded text-sm text-red-200 whitespace-pre-wrap break-words overflow-x-auto max-h-96">
                       {result.error}
                     </pre>
                   </div>
                 )}
 
-                <div>
-                  <h3 className="font-semibold text-gray-300 mb-2">Context Used:</h3>
-                  <pre className="bg-gray-900 p-4 rounded text-sm text-gray-400 overflow-x-auto">
-                    {JSON.stringify(result.context_used, null, 2)}
-                  </pre>
-                </div>
+                {result.context_used && (
+                  <div>
+                    <h3 className="font-semibold text-gray-300 mb-2">Context Used:</h3>
+                    <pre className="bg-gray-900 p-4 rounded text-sm text-gray-400 overflow-x-auto whitespace-pre-wrap break-words">
+                      {JSON.stringify(result.context_used, null, 2)}
+                    </pre>
+                  </div>
+                )}
               </div>
             )}
 
@@ -179,6 +181,17 @@ export default function TestToolsPage() {
 
             <button
               onClick={() => {
+                setSelectedTool('fs.read')
+                setToolInput('{"path": "/contracts/COIDE-CCC-001/docs/README-COIDE-CCC-001.md"}')
+              }}
+              className="p-4 bg-gray-700 hover:bg-gray-600 rounded text-left transition-colors"
+            >
+              <div className="font-medium text-cyan-400">Read Contracts File</div>
+              <div className="text-sm text-gray-400 mt-1">fs.read - Read from /contracts path</div>
+            </button>
+
+            <button
+              onClick={() => {
                 setSelectedTool('fs.list')
                 setToolInput('{"path": "/workspace"}')
               }}
@@ -186,6 +199,17 @@ export default function TestToolsPage() {
             >
               <div className="font-medium text-cyan-400">List Directory</div>
               <div className="text-sm text-gray-400 mt-1">fs.list - List workspace files</div>
+            </button>
+
+            <button
+              onClick={() => {
+                setSelectedTool('fs.list')
+                setToolInput('{"path": "/contracts/COIDE-CCC-001/docs"}')
+              }}
+              className="p-4 bg-gray-700 hover:bg-gray-600 rounded text-left transition-colors"
+            >
+              <div className="font-medium text-cyan-400">List Contracts Directory</div>
+              <div className="text-sm text-gray-400 mt-1">fs.list - List files in contracts docs</div>
             </button>
 
             <button
@@ -209,6 +233,23 @@ export default function TestToolsPage() {
               <div className="font-medium text-cyan-400">Database Query</div>
               <div className="text-sm text-gray-400 mt-1">db.query - Simple test query</div>
             </button>
+          </div>
+        </div>
+
+        {/* Help Section */}
+        <div className="mt-8 bg-blue-900/20 border border-blue-700 rounded-lg p-6">
+          <div className="flex items-start gap-3">
+            <span className="text-blue-400 text-xl">ℹ️</span>
+            <div className="flex-1">
+              <h4 className="font-semibold text-blue-400 mb-2">Path Resolution</h4>
+              <ul className="text-sm text-gray-300 space-y-1">
+                <li>• Use <code className="text-cyan-400">/contracts/...</code> for files in the contracts directory</li>
+                <li>• Use <code className="text-cyan-400">/tmp/...</code> for temporary files</li>
+                <li>• Use <code className="text-cyan-400">/workspace/...</code> for workspace files</li>
+                <li>• Wildcards (*.md) are NOT supported - use exact filenames</li>
+                <li>• For multiple files, use fs.list first, then read individual files</li>
+              </ul>
+            </div>
           </div>
         </div>
       </div>

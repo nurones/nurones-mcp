@@ -1,12 +1,12 @@
 {
   "roles": {
+    "admin": [
+      "*"
+    ],
     "operator": [
       "fs.read",
       "fs.list",
       "telemetry.push"
-    ],
-    "admin": [
-      "*"
     ],
     "reader": [
       "fs.read"
@@ -19,7 +19,9 @@
   "fs_allowlist": [
     "/workspace",
     "/tmp",
+    "/tmp/summaries",
     "/home/goldiuns/projects/nurones-au/nurones-cide/contracts",
-    "/home/goldiuns/projects/nurones-au/nurones-cide/contracts/COIDE-CCC-001/docs"
+    "/home/goldiuns/projects/nurones-au/nurones-cide/contracts/COIDE-CCC-001/docs",
+    "/home/goldiuns/projects/nurones-au/nurones-mcp/docs/archive/"
   ]
 }

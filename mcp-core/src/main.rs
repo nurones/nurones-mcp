@@ -306,6 +306,86 @@ async fn start_api_server(
         Json(state.get_tools().await)
     }
 
+    async fn create_tool(
+        State(state): State<Arc<server_state::ServerState>>,
+        Json(payload): Json<serde_json::Value>,
+    ) -> Result<Json<serde_json::Value>, StatusCode> {
+        let name = payload.get("name").and_then(|v| v.as_str())
+            .ok_or(StatusCode::BAD_REQUEST)?;
+        let version = payload.get("version").and_then(|v| v.as_str())
+            .unwrap_or("1.0.0");
+        let tool_type = payload.get("tool_type").and_then(|v| v.as_str())
+            .unwrap_or("Native");
+        let enabled = payload.get("enabled").and_then(|v| v.as_bool())
+            .unwrap_or(true);
+        let permissions = payload.get("permissions")
+            .and_then(|v| v.as_array())
+            .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+            .unwrap_or_else(Vec::new);
+
+        // Check if tool already exists
+        if state.get_tool(name).await.is_some() {
+            return Err(StatusCode::CONFLICT);
+        }
+
+        let tool_status = server_state::ToolStatus {
+            name: name.to_string(),
+            version: version.to_string(),
+            enabled,
+            permissions,
+            tool_type: tool_type.to_string(),
+        };
+
+        state.register_tool(name.to_string(), tool_status).await;
+        tracing::info!("Tool created: {}", name);
+        Ok(Json(json!({ "success": true, "name": name })))
+    }
+
+    async fn update_tool(
+        State(state): State<Arc<server_state::ServerState>>,
+        Path(tool_name): Path<String>,
+        Json(payload): Json<serde_json::Value>,
+    ) -> Result<Json<serde_json::Value>, StatusCode> {
+        // Get existing tool
+        let mut tool = state.get_tool(&tool_name).await
+            .ok_or(StatusCode::NOT_FOUND)?;
+
+        // Update fields if provided
+        if let Some(version) = payload.get("version").and_then(|v| v.as_str()) {
+            tool.version = version.to_string();
+        }
+        if let Some(tool_type) = payload.get("tool_type").and_then(|v| v.as_str()) {
+            tool.tool_type = tool_type.to_string();
+        }
+        if let Some(enabled) = payload.get("enabled").and_then(|v| v.as_bool()) {
+            tool.enabled = enabled;
+        }
+        if let Some(permissions_val) = payload.get("permissions") {
+            if let Some(arr) = permissions_val.as_array() {
+                tool.permissions = arr.iter()
+                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                    .collect();
+            }
+        }
+
+        state.update_tool(&tool_name, tool).await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        
+        tracing::info!("Tool updated: {}", tool_name);
+        Ok(Json(json!({ "success": true, "name": tool_name })))
+    }
+
+    async fn delete_tool(
+        State(state): State<Arc<server_state::ServerState>>,
+        Path(tool_name): Path<String>,
+    ) -> Result<Json<serde_json::Value>, StatusCode> {
+        state.delete_tool(&tool_name).await
+            .map_err(|_| StatusCode::NOT_FOUND)?;
+        
+        tracing::info!("Tool deleted: {}", tool_name);
+        Ok(Json(json!({ "success": true, "name": tool_name })))
+    }
+
     async fn get_tool_manifests() -> Json<serde_json::Value> {
         use std::fs;
         use std::path::Path;
@@ -324,6 +404,145 @@ async fn start_api_server(
             }
         }
         Json(serde_json::json!({ "manifests": manifests }))
+    }
+
+    async fn get_plugins() -> Json<serde_json::Value> {
+        use std::fs;
+        use std::path::Path;
+        let plugins_dir = Path::new("plugins");
+        let mut plugins = Vec::new();
+
+        if let Ok(entries) = fs::read_dir(plugins_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    let plugin_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("unknown");
+                    let package_json_path = path.join("package.json");
+                    
+                    if package_json_path.exists() {
+                        if let Ok(content) = fs::read_to_string(&package_json_path) {
+                            if let Ok(pkg) = serde_json::from_str::<serde_json::Value>(&content) {
+                                let commands = pkg.get("contributes")
+                                    .and_then(|c| c.get("commands"))
+                                    .and_then(|c| c.as_array())
+                                    .map(|arr| arr.len())
+                                    .unwrap_or(0);
+
+                                plugins.push(json!({
+                                    "name": pkg.get("displayName").and_then(|v| v.as_str()).unwrap_or(plugin_name),
+                                    "description": pkg.get("description").and_then(|v| v.as_str()).unwrap_or(""),
+                                    "version": pkg.get("version").and_then(|v| v.as_str()).unwrap_or("0.0.0"),
+                                    "path": format!("plugins/{}/", plugin_name),
+                                    "language": "TypeScript",
+                                    "commands": commands,
+                                    "is_template": plugin_name == "template"
+                                }));
+                            }
+                        }
+                    } else if plugin_name == "template" {
+                        // Handle template directory that might not have package.json
+                        plugins.push(json!({
+                            "name": "Extension Template",
+                            "description": "Starting point for new IDE/tool integrations",
+                            "version": "Template",
+                            "path": "plugins/template/",
+                            "language": "N/A",
+                            "commands": 0,
+                            "is_template": true
+                        }));
+                    }
+                }
+            }
+        }
+
+        Json(serde_json::json!({ "plugins": plugins }))
+    }
+
+    async fn get_extensions() -> Json<serde_json::Value> {
+        use std::fs;
+        use std::path::Path;
+        let extensions_dir = Path::new("extensions");
+        let mut extensions = Vec::new();
+
+        if let Ok(entries) = fs::read_dir(extensions_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    let ext_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("unknown");
+                    let package_json_path = path.join("package.json");
+                    
+                    if package_json_path.exists() {
+                        if let Ok(content) = fs::read_to_string(&package_json_path) {
+                            if let Ok(pkg) = serde_json::from_str::<serde_json::Value>(&content) {
+                                extensions.push(json!({
+                                    "name": pkg.get("name").and_then(|v| v.as_str()).unwrap_or(ext_name),
+                                    "description": pkg.get("description").and_then(|v| v.as_str()).unwrap_or(""),
+                                    "version": pkg.get("version").and_then(|v| v.as_str()).unwrap_or("0.0.0"),
+                                    "path": format!("extensions/{}/", ext_name),
+                                    "language": "TypeScript/Node.js",
+                                }));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Json(serde_json::json!({ "extensions": extensions }))
+    }
+
+    async fn get_connectors(State(state): State<Arc<server_state::ServerState>>) -> Json<serde_json::Value> {
+        use std::fs;
+        
+        // Read config from file
+        let config_data = fs::read_to_string(".mcp/config.json")
+            .and_then(|content| {
+                serde_json::from_str::<serde_json::Value>(&content)
+                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+            })
+            .unwrap_or_else(|_| json!({}));
+
+        let transports = config_data.get("transports")
+            .and_then(|t| t.as_array())
+            .map(|arr| {
+                arr.iter().filter_map(|t| t.as_str()).map(|t| {
+                    json!({
+                        "name": t,
+                        "type": match t {
+                            "stdio" => "Standard I/O",
+                            "ws" => "WebSocket",
+                            "http" => "HTTP",
+                            _ => "Unknown"
+                        },
+                        "enabled": true,
+                        "port": match t {
+                            "ws" | "http" => config_data.get("server").and_then(|s| s.get("port")),
+                            _ => None
+                        },
+                        "description": match t {
+                            "stdio" => "Process standard input/output communication",
+                            "ws" => "WebSocket bidirectional communication on server port",
+                            "http" => "HTTP request/response communication",
+                            _ => ""
+                        }
+                    })
+                }).collect::<Vec<_>>()
+            })
+            .unwrap_or_else(Vec::new);
+
+        let connections = state.get_connections().await;
+        
+        Json(json!({
+            "transports": transports,
+            "server_port": config_data.get("server").and_then(|s| s.get("port")).and_then(|p| p.as_u64()).unwrap_or(50550),
+            "virtual_connector": {
+                "enabled": true,
+                "type": "In-Process Broker",
+                "description": "Virtual connector for in-IDE connections via unified server port",
+                "active_connections": connections.len()
+            },
+            "connections": connections
+        }))
     }
 
     async fn toggle_context_engine(
@@ -519,11 +738,14 @@ async fn start_api_server(
         .route("/api/connector/virtual/disconnect", post(virtual_disconnect).with_state(vc_state))
         // Tools & Execution
         .route("/api/status", get(get_status).with_state(status_state))
-        .route("/api/tools", get(get_tools))
+        .route("/api/tools", get(get_tools).post(create_tool))
         .route("/api/tool-manifests", get(get_tool_manifests))
+        .route("/api/plugins", get(get_plugins))
+        .route("/api/extensions", get(get_extensions))
+        .route("/api/connectors", get(get_connectors))
         .route("/api/tools/execute", post(execute_tool).with_state(executor_state))
         .route("/api/context-engine", post(toggle_context_engine))
-        .route("/api/tools/:name", patch(toggle_tool))
+        .route("/api/tools/:name", patch(toggle_tool).put(update_tool).delete(delete_tool))
         // Connections
         .route("/api/connections", post(register_connection))
         .route("/api/connections/:id", axum::routing::delete(disconnect))

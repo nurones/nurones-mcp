@@ -193,20 +193,109 @@ impl ToolExecutor for InMemoryToolExecutor {
             
             tracing::info!("Executing WASI tool: {} from {}", tool_id, wasm_path);
             
-            // For fs tools, validate path is in allowlist
+            // For fs tools, validate and resolve path (including wildcard expansion)
+            let mut resolved_input = input.clone();
             if tool_id.starts_with("fs.") {
                 if let Some(path) = input.get("path").and_then(|v| v.as_str()) {
                     tracing::debug!("Checking path '{}' against allowlist: {:?}", path, self.fs_allowlist);
-                    is_allowed(path, &self.fs_allowlist)
-                        .map_err(|e| anyhow::anyhow!("Security error: {}", e))?;
+                    
+                    // Check if path contains wildcards
+                    if path.contains('*') || path.contains('?') {
+                        // Expand wildcards to list of files
+                        match crate::security::expand_wildcard_path(path, &self.fs_allowlist) {
+                            Ok(matched_files) => {
+                                tracing::info!("Wildcard '{}' expanded to {} files", path, matched_files.len());
+                                
+                                // For fs.read with wildcards, read all matching files
+                                if tool_id == "fs.read" {
+                                    let mut file_contents = Vec::new();
+                                    for file_path in &matched_files {
+                                        let file_str = file_path.to_string_lossy().to_string();
+                                        match tokio::fs::read_to_string(&file_str).await {
+                                            Ok(content) => {
+                                                file_contents.push(serde_json::json!({
+                                                    "path": file_str,
+                                                    "name": file_path.file_name().and_then(|n| n.to_str()).unwrap_or("unknown"),
+                                                    "content": content,
+                                                    "size": content.len()
+                                                }));
+                                            }
+                                            Err(e) => {
+                                                tracing::warn!("Failed to read {}: {}", file_str, e);
+                                            }
+                                        }
+                                    }
+                                    
+                                    return Ok(ToolResult {
+                                        success: true,
+                                        output: Some(serde_json::json!({
+                                            "pattern": path,
+                                            "matched_count": matched_files.len(),
+                                            "files": file_contents
+                                        })),
+                                        error: None,
+                                        execution_time: start.elapsed().as_millis() as u64,
+                                        context_used: context,
+                                    });
+                                } else if tool_id == "fs.list" {
+                                    // For fs.list with wildcards, return file list
+                                    let file_list: Vec<_> = matched_files.iter().map(|p| {
+                                        let metadata = std::fs::metadata(p).ok();
+                                        serde_json::json!({
+                                            "name": p.file_name().and_then(|n| n.to_str()).unwrap_or("unknown"),
+                                            "path": p.to_string_lossy().to_string(),
+                                            "is_dir": metadata.as_ref().map(|m| m.is_dir()).unwrap_or(false),
+                                            "size": metadata.as_ref().map(|m| m.len()).unwrap_or(0)
+                                        })
+                                    }).collect();
+                                    
+                                    return Ok(ToolResult {
+                                        success: true,
+                                        output: Some(serde_json::json!({
+                                            "pattern": path,
+                                            "matched_count": matched_files.len(),
+                                            "entries": file_list
+                                        })),
+                                        error: None,
+                                        execution_time: start.elapsed().as_millis() as u64,
+                                        context_used: context,
+                                    });
+                                }
+                            }
+                            Err(e) => {
+                                return Ok(ToolResult {
+                                    success: false,
+                                    output: None,
+                                    error: Some(format!("Wildcard expansion failed: {}. Use fs.list to see available files first.", e)),
+                                    execution_time: start.elapsed().as_millis() as u64,
+                                    context_used: context,
+                                });
+                            }
+                        }
+                    } else {
+                        // Regular path (no wildcards) - validate and resolve
+                        is_allowed(path, &self.fs_allowlist)
+                            .map_err(|e| anyhow::anyhow!("Security error: {}", e))?;
+                        
+                        // Resolve the path before passing to WASI
+                        let resolved = crate::security::resolve_path(path, &self.fs_allowlist)
+                            .map_err(|e| anyhow::anyhow!("Failed to resolve path: {}", e))?;
+                        let resolved_str = resolved.to_string_lossy().to_string();
+                        tracing::info!("Resolved path '{}' to '{}'", path, resolved_str);
+                        
+                        // Update input with resolved path
+                        if let Some(obj) = resolved_input.as_object_mut() {
+                            obj.insert("path".to_string(), serde_json::Value::String(resolved_str));
+                        }
+                    }
                 }
             }
             
             // Convert allowlist to preopen dirs
             let preopen_dirs: Vec<&str> = self.fs_allowlist.iter().map(|s| s.as_str()).collect();
             
-            // Execute WASI module
-            match self.wasi_runner.exec(wasm_path, &input, &preopen_dirs) {
+            // Execute WASI module with resolved input
+            match self.wasi_runner.exec(wasm_path, &resolved_input, &preopen_dirs) {
                 Ok(output_str) => {
                     let output: serde_json::Value = serde_json::from_str(&output_str)
                         .unwrap_or_else(|_| serde_json::json!({ "result": output_str }));
