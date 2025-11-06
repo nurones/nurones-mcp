@@ -1,0 +1,20 @@
+{
+  "name": "scrape.url",
+  "version": "1.0.0",
+  "entry": "nodejs://extensions/web-scraper/dist/index.js",
+  "permissions": ["network", "read", "write"],
+  "description": "Scrape a single URL and extract data using CSS selectors",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "url": { "type": "string", "description": "Target URL to scrape" },
+      "selectors": { "type": "object", "description": "CSS selectors to extract data" },
+      "headers": { "type": "object", "description": "Custom HTTP headers" },
+      "userAgent": { "type": "string", "description": "User agent string" },
+      "timeout": { "type": "number", "description": "Request timeout in ms" },
+      "format": { "type": "string", "enum": ["json", "html", "text"], "description": "Output format" },
+      "outputDir": { "type": "string", "description": "Directory to save results" }
+    },
+    "required": ["url"]
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "extract.links",
+  "version": "1.0.0",
+  "entry": "nodejs://extensions/web-scraper/dist/index.js",
+  "permissions": ["network", "read"],
+  "description": "Extract all links from a URL or HTML content with optional filtering",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "url": { "type": "string", "description": "URL to extract links from" },
+      "html": { "type": "string", "description": "HTML content to parse (alternative to url)" },
+      "includeExternal": { "type": "boolean", "description": "Include external links", "default": false },
+      "filter": { "type": "string", "description": "Regex pattern to filter links" }
+    }
+  }
+}

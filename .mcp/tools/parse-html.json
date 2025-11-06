@@ -1,0 +1,19 @@
+{
+  "name": "parse.html",
+  "version": "1.0.0",
+  "entry": "nodejs://extensions/web-scraper/dist/index.js",
+  "permissions": ["read"],
+  "description": "Parse HTML content and extract data using CSS selectors",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "html": { "type": "string", "description": "HTML content to parse" },
+      "selectors": { 
+        "type": "object", 
+        "description": "CSS selectors mapping (key: selector)",
+        "additionalProperties": { "type": "string" }
+      }
+    },
+    "required": ["html", "selectors"]
+  }
+}

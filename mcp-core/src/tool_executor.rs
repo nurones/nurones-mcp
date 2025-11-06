@@ -132,6 +132,88 @@ impl InMemoryToolExecutor {
         }
     }
 
+    /// Execute Node.js extension tool via module loading
+    async fn execute_nodejs_extension(
+        &self,
+        tool_id: &str,
+        entry_path: &str,
+        input: serde_json::Value,
+        context: ContextFrame,
+        start: std::time::Instant,
+    ) -> anyhow::Result<ToolResult> {
+        use std::process::{Command, Stdio};
+        use std::io::Write;
+        
+        // Create Node.js script to load and execute the extension
+        let script = format!(r#"
+            const mod = require('./{entry_path}');
+            const input = JSON.parse(process.argv[1]);
+            
+            (async () => {{
+                try {{
+                    const result = await mod.executeTool('{tool_id}', input);
+                    console.log(JSON.stringify(result));
+                    process.exit(result.success ? 0 : 1);
+                }} catch (error) {{
+                    console.log(JSON.stringify({{
+                        success: false,
+                        error: error.message || String(error)
+                    }}));
+                    process.exit(1);
+                }}
+            }})();
+        "#, entry_path = entry_path, tool_id = tool_id);
+        
+        let input_json = serde_json::to_string(&input)?;
+        
+        // Execute via Node.js
+        let mut child = Command::new("node")
+            .arg("-e")
+            .arg(&script)
+            .arg(&input_json)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()?;
+        
+        // Wait and capture output
+        let output = child.wait_with_output()?;
+        
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        
+        if !stderr.is_empty() {
+            tracing::warn!("Extension stderr: {}", stderr);
+        }
+        
+        // Parse the tool output
+        match serde_json::from_str::<serde_json::Value>(&stdout) {
+            Ok(result) => {
+                let success = result.get("success").and_then(|v| v.as_bool()).unwrap_or(false);
+                let data = result.get("data").cloned();
+                let error = result.get("error").and_then(|v| v.as_str()).map(|s| s.to_string());
+                
+                Ok(ToolResult {
+                    success,
+                    output: data,
+                    error,
+                    execution_time: start.elapsed().as_millis() as u64,
+                    context_used: context,
+                })
+            }
+            Err(e) => {
+                tracing::error!("Failed to parse extension output: {}. Output: {}", e, stdout);
+                Ok(ToolResult {
+                    success: false,
+                    output: None,
+                    error: Some(format!("Failed to parse extension output: {}. Raw: {}", e, stdout)),
+                    execution_time: start.elapsed().as_millis() as u64,
+                    context_used: context,
+                })
+            }
+        }
+    }
+
     /// Register a tool from manifest file
     pub async fn register_tool(&self, manifest_path: &str) -> anyhow::Result<()> {
         let content = tokio::fs::read_to_string(manifest_path).await?;
@@ -319,6 +401,14 @@ impl ToolExecutor for InMemoryToolExecutor {
                     });
                 }
             }
+        }
+
+        // Check if this is a Node.js extension tool
+        if tool.entry.starts_with("nodejs://") {
+            let entry_path = tool.entry.trim_start_matches("nodejs://");
+            tracing::info!("Executing Node.js extension tool: {} from {}", tool_id, entry_path);
+            
+            return self.execute_nodejs_extension(tool_id, entry_path, input, context, start).await;
         }
 
         // Check if this is a native Node.js tool

@@ -1,0 +1,39 @@
+{
+  "name": "@nurones/mcp-ext-web-scraper",
+  "version": "1.0.0",
+  "description": "Ultimate web scraping tool with crawling, parsing, and extraction capabilities",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "echo \"No tests configured\""
+  },
+  "keywords": [
+    "mcp",
+    "extension",
+    "web-scraper",
+    "scraping",
+    "crawler"
+  ],
+  "author": "Nurones",
+  "license": "MIT",
+  "dependencies": {
+    "cheerio": "^1.0.0-rc.12",
+    "node-fetch": "^2.7.0"
+  },
+  "devDependencies": {
+    "@types/cheerio": "^0.22.35",
+    "@types/node": "^20.0.0",
+    "@types/node-fetch": "^2.6.13",
+    "typescript": "^5.0.0"
+  },
+  "mcp": {
+    "permissions": [
+      "network",
+      "read",
+      "write",
+      "compute"
+    ],
+    "entry": "dist/index.js"
+  }
+}

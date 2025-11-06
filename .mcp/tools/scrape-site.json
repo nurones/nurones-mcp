@@ -1,0 +1,22 @@
+{
+  "name": "scrape.site",
+  "version": "1.0.0",
+  "entry": "nodejs://extensions/web-scraper/dist/index.js",
+  "permissions": ["network", "read", "write", "compute"],
+  "description": "Crawl and scrape an entire website with configurable depth and rate limiting",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "startUrl": { "type": "string", "description": "Starting URL for crawl" },
+      "maxPages": { "type": "number", "description": "Maximum pages to scrape", "default": 50 },
+      "maxDepth": { "type": "number", "description": "Maximum crawl depth", "default": 3 },
+      "sameDomain": { "type": "boolean", "description": "Only crawl same domain", "default": true },
+      "selectors": { "type": "object", "description": "CSS selectors to extract from each page" },
+      "rateLimit": { "type": "number", "description": "Delay between requests in ms", "default": 1000 },
+      "concurrency": { "type": "number", "description": "Concurrent requests", "default": 1 },
+      "respectRobots": { "type": "boolean", "description": "Respect robots.txt", "default": true },
+      "outputDir": { "type": "string", "description": "Directory to save crawl results" }
+    },
+    "required": ["startUrl"]
+  }
+}
