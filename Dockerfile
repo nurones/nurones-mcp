@@ -56,9 +56,14 @@ FROM debian:sid-slim AS runtime
 RUN useradd -m -u 10001 appuser
 WORKDIR /app
 
-# Minimal runtime deps
+# Minimal runtime deps + Node.js for extensions
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates curl \
+    ca-certificates curl gnupg \
+ && mkdir -p /etc/apt/keyrings \
+ && curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg \
+ && echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_20.x nodistro main" | tee /etc/apt/sources.list.d/nodesource.list \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends nodejs \
  && rm -rf /var/lib/apt/lists/*
 
 # Copy Rust artifacts
@@ -72,6 +77,14 @@ COPY --from=build-admin /app/admin-web/out /app/admin-web/out
 COPY .mcp/config.json /app/.mcp/config.json
 COPY .mcp/policies.json /app/.mcp/policies.json
 COPY .mcp/context-default.json /app/.mcp/context-default.json
+COPY .mcp/tools /app/.mcp/tools
+
+# Copy extensions with built artifacts
+COPY extensions/ /app/extensions/
+
+# Install extension dependencies
+RUN cd /app/extensions/session-compression && npm ci --omit=dev || true
+RUN cd /app/extensions/web-scraper && npm ci --omit=dev || true
 
 # Create directories for extensions and plugins
 RUN mkdir -p /app/extensions /app/plugins && chown -R appuser:appuser /app
