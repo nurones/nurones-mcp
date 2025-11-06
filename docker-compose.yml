@@ -28,7 +28,7 @@ services:
     tmpfs:
       - /tmp
       - /run
-    restart: unless-stopped
+    restart: always
 
   prometheus:
     image: prom/prometheus:v2.55.0
@@ -40,4 +40,4 @@ services:
         condition: service_healthy
     ports:
       - "9090:9090"
-    restart: unless-stopped
+    restart: always
