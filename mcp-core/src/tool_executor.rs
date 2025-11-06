@@ -332,14 +332,23 @@ impl ToolExecutor for InMemoryToolExecutor {
                 return self.execute_session_compression(input, context, start).await;
             }
             
-            // Other native tools would be added here
-            return Ok(ToolResult {
-                success: false,
-                output: None,
-                error: Some(format!("Native tool not implemented: {}", tool_id)),
-                execution_time: start.elapsed().as_millis() as u64,
-                context_used: context,
-            });
+            // Handle built-in native tools inline
+            match tool_id {
+                "http.request" | "fetch.url" | "env.get" | "process.execute" | 
+                "telemetry.push" | "db.query" | "db.execute" | "db.schema" |
+                "embedding.generate" | "completion.stream" => {
+                    // Continue to tool-specific implementation below
+                }
+                _ => {
+                    return Ok(ToolResult {
+                        success: false,
+                        output: None,
+                        error: Some(format!("Native tool not implemented: {}", tool_id)),
+                        execution_time: start.elapsed().as_millis() as u64,
+                        context_used: context,
+                    });
+                }
+            }
         }
 
         // For filesystem tools, check context-governed permissions
