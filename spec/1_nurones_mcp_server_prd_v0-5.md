@@ -2,9 +2,9 @@
 
 **License:** Apache-2.0 (Core) + MIT (Extensions)  
 **Version:** 0.5-NURONES (Spiral + Context Engineering Hardened)  
-**Architect:** Marcus (Unified Meta-Cognitive Framework v3.4)  
+**Architect:** JW (Unified Meta-Cognitive Framework v3.4)  
 **Release Date:** November 2025  
-**Status:** Final Production-Grade SSOT (Nurones Component for Qoder Platform)
+**Status:** Final Production-Grade SSOT (Nurones Component)
 
 ---
 

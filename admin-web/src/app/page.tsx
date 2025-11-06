@@ -12,6 +12,14 @@ export default function Home() {
   const [serverStatus, setServerStatus] = useState<ServerStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [healthExpanded, setHealthExpanded] = useState(false)
+  const [healthStatus, setHealthStatus] = useState({
+    core: 'healthy' as 'healthy' | 'degraded' | 'down',
+    prometheus: 'unknown' as 'healthy' | 'degraded' | 'down' | 'unknown',
+    contextEngine: 'disabled' as 'healthy' | 'disabled',
+    wasiRuntime: 'down' as 'healthy' | 'down',
+    nativeRuntime: 'healthy' as 'healthy' | 'down'
+  })
 
   // Fetch server status on mount and poll every 5 seconds
   useEffect(() => {
@@ -20,16 +28,37 @@ export default function Home() {
         const status = await fetchServerStatus()
         setServerStatus(status)
         setError(null)
+        
+        // Update health status
+        setHealthStatus({
+          core: 'healthy',
+          prometheus: 'unknown',
+          contextEngine: status.context_engine_enabled ? 'healthy' : 'disabled',
+          wasiRuntime: status.runtimes?.wasi_available ? 'healthy' : 'down',
+          nativeRuntime: status.runtimes?.native_available ? 'healthy' : 'down'
+        })
+        
+        // Check Prometheus health
+        try {
+          const promHealth = await fetch('http://localhost:9090/-/healthy')
+          setHealthStatus(prev => ({
+            ...prev,
+            prometheus: promHealth.ok ? 'healthy' : 'down'
+          }))
+        } catch {
+          setHealthStatus(prev => ({ ...prev, prometheus: 'down' }))
+        }
       } catch (err) {
         console.error('Failed to fetch server status:', err)
         setError('Failed to connect to MCP server')
+        setHealthStatus(prev => ({ ...prev, core: 'down' }))
       } finally {
         setLoading(false)
       }
     }
 
     loadStatus()
-    const interval = setInterval(loadStatus, 5000)
+    const interval = setInterval(loadStatus, 3000)
 
     return () => clearInterval(interval)
   }, [])
@@ -82,7 +111,7 @@ export default function Home() {
       <div className="border-b border-gray-800 bg-gray-950">
         <div className="container mx-auto px-6">
           <nav className="flex gap-8">
-            {['Dashboard', 'Tools', 'Plugins', 'Extensions', 'Connectors', 'Test Tools', 'Policies', 'Telemetry', 'Context Monitor'].map((tab) => (
+            {['Dashboard', 'Tools', 'Plugins', 'Extensions', 'Connectors', 'Settings', 'Test Tools', 'Policies', 'Telemetry', 'Context Monitor'].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab.toLowerCase().replace(' ', '-'))}
@@ -100,7 +129,7 @@ export default function Home() {
       </div>
 
       {/* Content Area */}
-      <main className="container mx-auto px-6 py-8">
+      <main className="container mx-auto px-6 py-8 pb-24">
         {activeTab === 'dashboard' && <DashboardTab serverStatus={serverStatus} onToggleContextEngine={handleToggleContextEngine} />}
         {activeTab === 'tools' && <ToolsTab />}
         {activeTab === 'plugins' && <PluginsTab />}
@@ -110,7 +139,112 @@ export default function Home() {
         {activeTab === 'policies' && <PoliciesPage />}
         {activeTab === 'telemetry' && <TelemetryTab serverStatus={serverStatus} />}
         {activeTab === 'context-monitor' && <ContextMonitorTab serverStatus={serverStatus} />}
+        {activeTab === 'settings' && <SettingsTab />}
       </main>
+
+      {/* Health Status Bar */}
+      <div className="fixed bottom-0 left-0 right-0 bg-gray-950 border-t border-gray-800 z-50">
+        {healthExpanded ? (
+          <div className="container mx-auto px-6 py-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-semibold text-gray-300">System Health</h3>
+              <button
+                onClick={() => setHealthExpanded(false)}
+                className="text-gray-400 hover:text-gray-300 text-xs"
+              >
+                Collapse ▼
+              </button>
+            </div>
+            <div className="grid grid-cols-5 gap-4">
+              <HealthIndicator
+                name="MCP Core"
+                status={healthStatus.core}
+                details={serverStatus ? `v${serverStatus.version} • ${serverStatus.tools_count} tools` : 'Checking...'}
+              />
+              <HealthIndicator
+                name="Prometheus"
+                status={healthStatus.prometheus}
+                details={healthStatus.prometheus === 'healthy' ? 'Metrics collecting' : healthStatus.prometheus === 'unknown' ? 'Checking...' : 'Not accessible'}
+              />
+              <HealthIndicator
+                name="Context Engine"
+                status={healthStatus.contextEngine}
+                details={healthStatus.contextEngine === 'healthy' ? 'Active' : 'Disabled'}
+              />
+              <HealthIndicator
+                name="WASI Runtime"
+                status={healthStatus.wasiRuntime}
+                details={healthStatus.wasiRuntime === 'healthy' ? 'Available' : 'Not loaded'}
+              />
+              <HealthIndicator
+                name="Native Runtime"
+                status={healthStatus.nativeRuntime}
+                details={healthStatus.nativeRuntime === 'healthy' ? 'Available' : 'Not loaded'}
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="container mx-auto px-6 py-2">
+            <button
+              onClick={() => setHealthExpanded(true)}
+              className="w-full flex items-center justify-between hover:bg-gray-900 px-2 py-1 rounded transition-colors"
+            >
+              <div className="flex items-center gap-6">
+                <StatusDot status={healthStatus.core} label="Core" />
+                <StatusDot status={healthStatus.prometheus} label="Prometheus" />
+                <StatusDot status={healthStatus.contextEngine} label="Context" />
+                <StatusDot status={healthStatus.wasiRuntime} label="WASI" />
+                <StatusDot status={healthStatus.nativeRuntime} label="Native" />
+              </div>
+              <span className="text-xs text-gray-500">Click to expand ▲</span>
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function StatusDot({ status, label }: { status: string; label: string }) {
+  const colors = {
+    healthy: 'bg-green-500',
+    degraded: 'bg-yellow-500',
+    down: 'bg-red-500',
+    disabled: 'bg-gray-500',
+    unknown: 'bg-gray-600'
+  }
+  return (
+    <div className="flex items-center gap-2">
+      <span className={`w-2 h-2 rounded-full ${colors[status as keyof typeof colors] || 'bg-gray-600'}`}></span>
+      <span className="text-xs text-gray-400">{label}</span>
+    </div>
+  )
+}
+
+function HealthIndicator({ name, status, details }: { name: string; status: string; details: string }) {
+  const colors = {
+    healthy: 'border-green-500 bg-green-900/20',
+    degraded: 'border-yellow-500 bg-yellow-900/20',
+    down: 'border-red-500 bg-red-900/20',
+    disabled: 'border-gray-500 bg-gray-800/20',
+    unknown: 'border-gray-600 bg-gray-800/20'
+  }
+  const statusColors = {
+    healthy: 'text-green-400',
+    degraded: 'text-yellow-400',
+    down: 'text-red-400',
+    disabled: 'text-gray-400',
+    unknown: 'text-gray-500'
+  }
+  return (
+    <div className={`border-l-4 ${colors[status as keyof typeof colors] || 'border-gray-600 bg-gray-800/20'} p-3 rounded`}>
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-sm font-medium text-gray-300">{name}</span>
+        <span className={`text-xs font-semibold uppercase ${statusColors[status as keyof typeof statusColors] || 'text-gray-500'}`}>
+          {status}
+        </span>
+      </div>
+      <p className="text-xs text-gray-500">{details}</p>
     </div>
   )
 }
@@ -1862,6 +1996,145 @@ function ConnectorsTab() {
             </p>
             <p className="text-sm text-gray-300 mt-1">
               Configure transports in <code className="text-cyan-400">.mcp/config.json</code> under the <code>transports</code> array.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SettingsTab() {
+  const [settings, setSettings] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState<{type: 'success' | 'error', text: string} | null>(null)
+
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const res = await fetch('/api/settings/server')
+        if (res.ok) {
+          const data = await res.json()
+          setSettings(data)
+        }
+      } catch (err) {
+        console.error('Failed to load settings:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadSettings()
+  }, [])
+
+  const handleSave = async () => {
+    if (!settings) return
+    setSaving(true)
+    setMessage(null)
+    try {
+      const res = await fetch('/api/settings/server', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings)
+      })
+      if (res.ok) {
+        setMessage({ type: 'success', text: 'Settings saved successfully. Restart server to apply changes.' })
+      } else {
+        setMessage({ type: 'error', text: 'Failed to save settings' })
+      }
+    } catch (err) {
+      setMessage({ type: 'error', text: 'Error saving settings' })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) return <div className="text-center py-8">Loading settings...</div>
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-xl font-semibold">Server Settings</h2>
+        <p className="text-sm text-gray-400 mt-1">Configure MCP server runtime parameters</p>
+      </div>
+
+      {message && (
+        <div className={`rounded-lg p-4 ${message.type === 'success' ? 'bg-green-900/20 border border-green-700' : 'bg-red-900/20 border border-red-700'}`}>
+          <p className={message.type === 'success' ? 'text-green-400' : 'text-red-400'}>{message.text}</p>
+        </div>
+      )}
+
+      <div className="bg-gray-800 rounded-lg p-6 space-y-6">
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-2">Server Port</label>
+          <input
+            type="number"
+            value={settings?.port || 50550}
+            onChange={(e) => setSettings({...settings, port: parseInt(e.target.value)})}
+            className="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded text-white focus:border-cyan-500 focus:outline-none"
+          />
+          <p className="text-xs text-gray-500 mt-1">HTTP API and WebSocket server port</p>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-2">Observability Exporter</label>
+          <input
+            type="text"
+            value={settings?.otel_exporter || 'http://localhost:4318'}
+            onChange={(e) => setSettings({...settings, otel_exporter: e.target.value})}
+            className="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded text-white focus:border-cyan-500 focus:outline-none"
+          />
+          <p className="text-xs text-gray-500 mt-1">OpenTelemetry collector endpoint</p>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-3">Enabled Transports</label>
+          <div className="space-y-2">
+            {['stdio', 'ws', 'http'].map(transport => (
+              <label key={transport} className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  checked={settings?.transports?.includes(transport) || false}
+                  onChange={(e) => {
+                    const transports = settings?.transports || []
+                    setSettings({
+                      ...settings,
+                      transports: e.target.checked 
+                        ? [...transports, transport]
+                        : transports.filter((t: string) => t !== transport)
+                    })
+                  }}
+                  className="w-4 h-4 text-cyan-600 bg-gray-700 border-gray-600 rounded focus:ring-cyan-500"
+                />
+                <span className="text-sm text-gray-300">{transport.toUpperCase()}</span>
+              </label>
+            ))}
+          </div>
+          <p className="text-xs text-gray-500 mt-2">Select which transport protocols to enable</p>
+        </div>
+
+        <div className="pt-4 border-t border-gray-700">
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="px-6 py-2 bg-cyan-600 hover:bg-cyan-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded transition-colors font-medium"
+          >
+            {saving ? 'Saving...' : 'Save Settings'}
+          </button>
+          <p className="text-xs text-gray-500 mt-2">
+            ⚠️ Server restart required for changes to take effect
+          </p>
+        </div>
+      </div>
+
+      <div className="bg-yellow-900/20 border border-yellow-700 rounded-lg p-4">
+        <div className="flex items-start gap-3">
+          <span className="text-yellow-400 text-xl">⚠️</span>
+          <div>
+            <h4 className="font-semibold text-yellow-400">Configuration File</h4>
+            <p className="text-sm text-gray-300 mt-1">
+              Settings are stored in <code className="text-cyan-400">.mcp/config.json</code>. 
+              Manual edits to this file will override these settings.
             </p>
           </div>
         </div>
