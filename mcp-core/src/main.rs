@@ -125,6 +125,11 @@ async fn main() -> anyhow::Result<()> {
         ("process.execute", "1.0.0", vec!["execute", "system"], "Native"),
         ("env.get", "1.0.0", vec!["read", "system"], "Native"),
         ("telemetry.push", "1.0.0", vec!["emit"], "Native"),
+        ("scrape.url", "1.0.0", vec!["network", "read"], "Extension"),
+        ("scrape.site", "1.0.0", vec!["network", "read", "write"], "Extension"),
+        ("parse.html", "1.0.0", vec!["read"], "Extension"),
+        ("extract.links", "1.0.0", vec!["network", "read"], "Extension"),
+        ("session.compress", "1.0.0", vec!["read", "write", "ai"], "Extension"),
     ];
     
     for (name, version, permissions, tool_type) in tool_manifests {
