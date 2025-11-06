@@ -55,9 +55,11 @@ export default function TestToolsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-8">
-      <div className="max-w-6xl mx-auto">
-        <h1 className="text-3xl font-bold text-cyan-400 mb-8">Tool Execution Test Lab</h1>
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-xl font-semibold">Tool Execution Test Lab</h2>
+        <p className="text-sm text-gray-400 mt-1">Test and execute MCP tools with custom inputs</p>
+      </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Input Panel */}
@@ -164,8 +166,8 @@ export default function TestToolsPage() {
           </div>
         </div>
 
-        {/* Quick Test Examples */}
-        <div className="mt-8 bg-gray-800 rounded-lg p-6">
+      {/* Quick Test Examples */}
+      <div className="bg-gray-800 rounded-lg p-6">
           <h2 className="text-xl font-semibold mb-4">Quick Test Examples</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <button
@@ -236,20 +238,19 @@ export default function TestToolsPage() {
           </div>
         </div>
 
-        {/* Help Section */}
-        <div className="mt-8 bg-blue-900/20 border border-blue-700 rounded-lg p-6">
-          <div className="flex items-start gap-3">
-            <span className="text-blue-400 text-xl">ℹ️</span>
-            <div className="flex-1">
-              <h4 className="font-semibold text-blue-400 mb-2">Path Resolution</h4>
-              <ul className="text-sm text-gray-300 space-y-1">
-                <li>• Use <code className="text-cyan-400">/contracts/...</code> for files in the contracts directory</li>
-                <li>• Use <code className="text-cyan-400">/tmp/...</code> for temporary files</li>
-                <li>• Use <code className="text-cyan-400">/workspace/...</code> for workspace files</li>
-                <li>• Wildcards (*.md) are NOT supported - use exact filenames</li>
-                <li>• For multiple files, use fs.list first, then read individual files</li>
-              </ul>
-            </div>
+      {/* Help Section */}
+      <div className="bg-blue-900/20 border border-blue-700 rounded-lg p-6">
+        <div className="flex items-start gap-3">
+          <span className="text-blue-400 text-xl">ℹ️</span>
+          <div className="flex-1">
+            <h4 className="font-semibold text-blue-400 mb-2">Path Resolution</h4>
+            <ul className="text-sm text-gray-300 space-y-1">
+              <li>• Use <code className="text-cyan-400">/contracts/...</code> for files in the contracts directory</li>
+              <li>• Use <code className="text-cyan-400">/tmp/...</code> for temporary files</li>
+              <li>• Use <code className="text-cyan-400">/workspace/...</code> for workspace files</li>
+              <li>• Wildcards (*.md) are NOT supported - use exact filenames</li>
+              <li>• For multiple files, use fs.list first, then read individual files</li>
+            </ul>
           </div>
         </div>
       </div>

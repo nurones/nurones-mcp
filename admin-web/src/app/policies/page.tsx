@@ -137,13 +137,16 @@ export default function PoliciesPage() {
   }
 
   return (
-    <div className="p-6 space-y-6 max-w-6xl">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-white">Configure Policies</h1>
+        <div>
+          <h2 className="text-xl font-semibold">Security Policies</h2>
+          <p className="text-sm text-gray-400 mt-1">Manage roles, permissions, and filesystem access controls</p>
+        </div>
         <button
           onClick={savePolicies}
           disabled={saving}
-          className="px-4 py-2 rounded bg-green-600 text-white font-medium hover:bg-green-700 disabled:opacity-50"
+          className="px-6 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded transition-colors font-medium"
         >
           {saving ? 'Saving...' : 'Save Policies'}
         </button>
@@ -162,21 +165,21 @@ export default function PoliciesPage() {
       )}
 
       {/* Roles Section */}
-      <div className="p-4 rounded bg-gray-900 border border-gray-700">
-        <h2 className="text-xl font-semibold text-white mb-4">Roles & Permissions</h2>
+      <div className="bg-gray-800 rounded-lg p-6">
+        <h3 className="text-lg font-semibold mb-4">Roles & Permissions</h3>
         <div className="space-y-3">
           {Object.entries(policies.roles).map(([roleName, tools]) => (
-            <div key={roleName} className="flex items-start justify-between p-3 rounded bg-gray-800">
+            <div key={roleName} className="flex items-start justify-between p-4 rounded bg-gray-700">
               <div className="flex-1">
                 <div className="font-medium text-white">{roleName}</div>
                 <div className="text-sm text-gray-400 mt-1">
                   Tools: {tools.join(', ')}
                 </div>
               </div>
-              <button
-                onClick={() => removeRole(roleName)}
-                className="px-3 py-1 text-sm rounded bg-red-600 text-white hover:bg-red-700"
-              >
+                <button
+                  onClick={() => removeRole(roleName)}
+                  className="px-3 py-1 text-sm rounded bg-red-600 hover:bg-red-700 text-white transition-colors"
+                >
                 Remove
               </button>
             </div>
@@ -189,18 +192,18 @@ export default function PoliciesPage() {
             placeholder="Role name (e.g., developer)"
             value={newRoleName}
             onChange={(e) => setNewRoleName(e.target.value)}
-            className="flex-1 px-3 py-2 rounded bg-gray-800 border border-gray-700 text-white placeholder-gray-500"
+            className="flex-1 px-4 py-2 bg-gray-900 border border-gray-700 rounded text-white placeholder-gray-500 focus:border-cyan-500 focus:outline-none"
           />
           <input
             type="text"
             placeholder="Tools (comma-separated, e.g., fs.*, db.query)"
             value={newRoleTools}
             onChange={(e) => setNewRoleTools(e.target.value)}
-            className="flex-1 px-3 py-2 rounded bg-gray-800 border border-gray-700 text-white placeholder-gray-500"
+            className="flex-1 px-4 py-2 bg-gray-900 border border-gray-700 rounded text-white placeholder-gray-500 focus:border-cyan-500 focus:outline-none"
           />
           <button
             onClick={addRole}
-            className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
+            className="px-6 py-2 bg-cyan-600 hover:bg-cyan-700 rounded transition-colors font-medium"
           >
             Add Role
           </button>
@@ -208,20 +211,20 @@ export default function PoliciesPage() {
       </div>
 
       {/* Users Section */}
-      <div className="p-4 rounded bg-gray-900 border border-gray-700">
-        <h2 className="text-xl font-semibold text-white mb-4">User Assignments</h2>
+      <div className="bg-gray-800 rounded-lg p-6">
+        <h3 className="text-lg font-semibold mb-4">User Assignments</h3>
         <div className="space-y-2">
           {Object.entries(policies.users).map(([userName, role]) => (
-            <div key={userName} className="flex items-center justify-between p-3 rounded bg-gray-800">
+            <div key={userName} className="flex items-center justify-between p-4 rounded bg-gray-700">
               <div className="flex-1">
                 <span className="font-medium text-white">{userName}</span>
                 <span className="mx-2 text-gray-500">→</span>
                 <span className="text-blue-400">{role}</span>
               </div>
-              <button
-                onClick={() => removeUser(userName)}
-                className="px-3 py-1 text-sm rounded bg-red-600 text-white hover:bg-red-700"
-              >
+                <button
+                  onClick={() => removeUser(userName)}
+                  className="px-3 py-1 text-sm rounded bg-red-600 hover:bg-red-700 text-white transition-colors"
+                >
                 Remove
               </button>
             </div>
@@ -234,12 +237,12 @@ export default function PoliciesPage() {
             placeholder="User ID (e.g., john.doe)"
             value={newUserName}
             onChange={(e) => setNewUserName(e.target.value)}
-            className="flex-1 px-3 py-2 rounded bg-gray-800 border border-gray-700 text-white placeholder-gray-500"
+            className="flex-1 px-4 py-2 bg-gray-900 border border-gray-700 rounded text-white placeholder-gray-500 focus:border-cyan-500 focus:outline-none"
           />
           <select
             value={newUserRole}
             onChange={(e) => setNewUserRole(e.target.value)}
-            className="px-3 py-2 rounded bg-gray-800 border border-gray-700 text-white"
+            className="px-4 py-2 bg-gray-900 border border-gray-700 rounded text-white focus:border-cyan-500 focus:outline-none"
           >
             <option value="">Select role...</option>
             {Object.keys(policies.roles).map(role => (
@@ -248,7 +251,7 @@ export default function PoliciesPage() {
           </select>
           <button
             onClick={addUser}
-            className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
+            className="px-6 py-2 bg-cyan-600 hover:bg-cyan-700 rounded transition-colors font-medium"
           >
             Add User
           </button>
@@ -256,19 +259,19 @@ export default function PoliciesPage() {
       </div>
 
       {/* Filesystem Allowlist Section */}
-      <div className="p-4 rounded bg-gray-900 border border-gray-700">
-        <h2 className="text-xl font-semibold text-white mb-4">Filesystem Allowlist</h2>
+      <div className="bg-gray-800 rounded-lg p-6">
+        <h3 className="text-lg font-semibold mb-4">Filesystem Allowlist</h3>
         <p className="text-sm text-gray-400 mb-3">
           Only paths in this allowlist can be accessed by fs.* tools
         </p>
         <div className="space-y-2">
           {policies.fs_allowlist.map((path) => (
-            <div key={path} className="flex items-center justify-between p-3 rounded bg-gray-800">
+            <div key={path} className="flex items-center justify-between p-4 rounded bg-gray-700">
               <code className="text-green-400">{path}</code>
-              <button
-                onClick={() => removeAllowPath(path)}
-                className="px-3 py-1 text-sm rounded bg-red-600 text-white hover:bg-red-700"
-              >
+                <button
+                  onClick={() => removeAllowPath(path)}
+                  className="px-3 py-1 text-sm rounded bg-red-600 hover:bg-red-700 text-white transition-colors"
+                >
                 Remove
               </button>
             </div>
@@ -281,11 +284,11 @@ export default function PoliciesPage() {
             placeholder="Directory path (e.g., /workspace/data)"
             value={newAllowPath}
             onChange={(e) => setNewAllowPath(e.target.value)}
-            className="flex-1 px-3 py-2 rounded bg-gray-800 border border-gray-700 text-white placeholder-gray-500 font-mono"
+            className="flex-1 px-4 py-2 bg-gray-900 border border-gray-700 rounded text-white placeholder-gray-500 font-mono focus:border-cyan-500 focus:outline-none"
           />
           <button
             onClick={addAllowPath}
-            className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
+            className="px-6 py-2 bg-cyan-600 hover:bg-cyan-700 rounded transition-colors font-medium"
           >
             Add Path
           </button>
