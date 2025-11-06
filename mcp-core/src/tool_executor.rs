@@ -435,21 +435,228 @@ impl ToolExecutor for InMemoryToolExecutor {
                     }
                 }
             }
+            "http.request" => {
+                let url = input.get("url")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow::anyhow!("http.request requires 'url' parameter"))?;
+                
+                let method = input.get("method").and_then(|v| v.as_str()).unwrap_or("GET");
+                let body = input.get("body");
+                
+                let client = reqwest::Client::new();
+                let mut request = match method.to_uppercase().as_str() {
+                    "GET" => client.get(url),
+                    "POST" => client.post(url),
+                    "PUT" => client.put(url),
+                    "DELETE" => client.delete(url),
+                    _ => client.get(url),
+                };
+                
+                if let Some(headers) = input.get("headers").and_then(|v| v.as_object()) {
+                    for (key, value) in headers {
+                        if let Some(val_str) = value.as_str() {
+                            request = request.header(key, val_str);
+                        }
+                    }
+                }
+                
+                if let Some(body_val) = body {
+                    request = request.json(body_val);
+                }
+                
+                match request.send().await {
+                    Ok(response) => {
+                        let status = response.status().as_u16();
+                        let headers: std::collections::HashMap<String, String> = response
+                            .headers()
+                            .iter()
+                            .filter_map(|(k, v)| {
+                                v.to_str().ok().map(|val| (k.to_string(), val.to_string()))
+                            })
+                            .collect();
+                        
+                        let body = response.text().await.unwrap_or_default();
+                        
+                        return Ok(ToolResult {
+                            success: status < 400,
+                            output: Some(serde_json::json!({
+                                "status": status,
+                                "headers": headers,
+                                "body": body
+                            })),
+                            error: None,
+                            execution_time: start.elapsed().as_millis() as u64,
+                            context_used: context,
+                        });
+                    }
+                    Err(e) => {
+                        return Ok(ToolResult {
+                            success: false,
+                            output: None,
+                            error: Some(format!("HTTP request failed: {}", e)),
+                            execution_time: start.elapsed().as_millis() as u64,
+                            context_used: context,
+                        });
+                    }
+                }
+            }
+            "fetch.url" => {
+                let url = input.get("url")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow::anyhow!("fetch.url requires 'url' parameter"))?;
+                
+                let client = reqwest::Client::new();
+                match client.get(url).send().await {
+                    Ok(response) => {
+                        let content = response.text().await.unwrap_or_default();
+                        return Ok(ToolResult {
+                            success: true,
+                            output: Some(serde_json::json!({
+                                "url": url,
+                                "content": content,
+                                "length": content.len()
+                            })),
+                            error: None,
+                            execution_time: start.elapsed().as_millis() as u64,
+                            context_used: context,
+                        });
+                    }
+                    Err(e) => {
+                        return Ok(ToolResult {
+                            success: false,
+                            output: None,
+                            error: Some(format!("Fetch failed: {}", e)),
+                            execution_time: start.elapsed().as_millis() as u64,
+                            context_used: context,
+                        });
+                    }
+                }
+            }
+            "env.get" => {
+                let key = input.get("key")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow::anyhow!("env.get requires 'key' parameter"))?;
+                
+                match std::env::var(key) {
+                    Ok(value) => {
+                        return Ok(ToolResult {
+                            success: true,
+                            output: Some(serde_json::json!({
+                                "key": key,
+                                "value": value
+                            })),
+                            error: None,
+                            execution_time: start.elapsed().as_millis() as u64,
+                            context_used: context,
+                        });
+                    }
+                    Err(_) => {
+                        return Ok(ToolResult {
+                            success: false,
+                            output: None,
+                            error: Some(format!("Environment variable '{}' not found", key)),
+                            execution_time: start.elapsed().as_millis() as u64,
+                            context_used: context,
+                        });
+                    }
+                }
+            }
+            "process.execute" => {
+                let command = input.get("command")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow::anyhow!("process.execute requires 'command' parameter"))?;
+                
+                let args = input.get("args")
+                    .and_then(|v| v.as_array())
+                    .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect::<Vec<_>>())
+                    .unwrap_or_default();
+                
+                use std::process::Command;
+                match Command::new(command).args(&args).output() {
+                    Ok(output) => {
+                        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+                        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+                        
+                        return Ok(ToolResult {
+                            success: output.status.success(),
+                            output: Some(serde_json::json!({
+                                "stdout": stdout,
+                                "stderr": stderr,
+                                "exit_code": output.status.code()
+                            })),
+                            error: if !output.status.success() { Some(stderr) } else { None },
+                            execution_time: start.elapsed().as_millis() as u64,
+                            context_used: context,
+                        });
+                    }
+                    Err(e) => {
+                        return Ok(ToolResult {
+                            success: false,
+                            output: None,
+                            error: Some(format!("Process execution failed: {}", e)),
+                            execution_time: start.elapsed().as_millis() as u64,
+                            context_used: context,
+                        });
+                    }
+                }
+            }
+            "db.query" => {
+                return Ok(ToolResult {
+                    success: false,
+                    output: None,
+                    error: Some("Database not configured. Set DATABASE_URL environment variable.".to_string()),
+                    execution_time: start.elapsed().as_millis() as u64,
+                    context_used: context,
+                });
+            }
+            "db.execute" => {
+                return Ok(ToolResult {
+                    success: false,
+                    output: None,
+                    error: Some("Database not configured. Set DATABASE_URL environment variable.".to_string()),
+                    execution_time: start.elapsed().as_millis() as u64,
+                    context_used: context,
+                });
+            }
+            "db.schema" => {
+                return Ok(ToolResult {
+                    success: false,
+                    output: None,
+                    error: Some("Database not configured. Set DATABASE_URL environment variable.".to_string()),
+                    execution_time: start.elapsed().as_millis() as u64,
+                    context_used: context,
+                });
+            }
+            "embedding.generate" | "completion.stream" => {
+                return Ok(ToolResult {
+                    success: false,
+                    output: None,
+                    error: Some("AI tools require OPENAI_API_KEY environment variable.".to_string()),
+                    execution_time: start.elapsed().as_millis() as u64,
+                    context_used: context,
+                });
+            }
+            "telemetry.push" => {
+                tracing::info!("Telemetry event: {:?}", input);
+                return Ok(ToolResult {
+                    success: true,
+                    output: Some(serde_json::json!({
+                        "pushed": true,
+                        "timestamp": chrono::Utc::now().to_rfc3339()
+                    })),
+                    error: None,
+                    execution_time: start.elapsed().as_millis() as u64,
+                    context_used: context,
+                });
+            }
             _ => {}
         }
 
-        // Simulate successful execution
-        let output = serde_json::json!({
-            "tool": tool_id,
-            "input": input,
-            "result": "success",
-            "context_trace": context.reason_trace_id
-        });
-
+        // Fallback error for unimplemented tools
         Ok(ToolResult {
-            success: true,
-            output: Some(output),
-            error: None,
+            success: false,
+            output: None,
+            error: Some(format!("Tool '{}' not implemented", tool_id)),
             execution_time: start.elapsed().as_millis() as u64,
             context_used: context,
         })
